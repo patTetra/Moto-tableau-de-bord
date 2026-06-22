@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Moto Dash</title>
+    <style>
+        :root {
+            --bg-color: #0a0a0a;
+            --card-bg: #16161a;
+            --accent-color: #00ff66; /* Vert style "éco/vitesse" */
+            --text-color: #ffffff;
+            --text-muted: #8e8e93;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: calc(env(safe-area-inset-top) + 20px) 20px calc(env(safe-area-inset-bottom) + 20px) 20px;
+            overflow: hidden;
+        }
+
+        /* Section Vitesse */
+        .speed-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .speed-value {
+            font-size: 32vw; /* Très grand pour une lecture rapide sur route */
+            font-weight: 700;
+            line-height: 0.9;
+            color: var(--accent-color);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .speed-unit {
+            font-size: 1.5rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            margin-top: 5px;
+        }
+
+        /* Section Autonomie / Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .card-label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            letter-spacing: 1px;
+        }
+
+        .card-value {
+            font-size: 2.2rem;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Bouton de réinitialisation */
+        .btn-reset {
+            background-color: #ff3b30;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 15px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            width: 100%;
+            box-shadow: 0 4px 10px rgba(255, 59, 48, 0.3);
+            transition: opacity 0.2s;
+        }
+
+        .btn-reset:active {
+            opacity: 0.7;
+        }
+
+        /* Overlay d'erreur/permission */
+        #overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+            text-align: center;
+            z-index: 100;
+        }
+
+        #overlay button {
+            background: var(--accent-color);
+            color: black;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="overlay">
+        <h2>Moto Dash</h2>
+        <p style="margin-top: 15px; color: var(--text-muted);">Cette application nécessite l'accès à votre position GPS pour calculer la vitesse et la distance.</p>
+        <button onclick="startApp()">Activer le GPS</button>
+    </div>
+
+    <div class="speed-container">
+        <div id="speed" class="speed-value">0</div>
+        <div class="speed-unit">km/h</div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="card">
+            <div class="card-label">Parcouru</div>
+            <div id="distance" class="card-value">0.0</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">km</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Autonomie</div>
+            <div id="range" class="card-value">150</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">km restants</div>
+        </div>
+    </div>
+
+    <button class="btn-reset" onclick="resetTrip()">Reset Charge (100%)</button>
+
+    <script>
+        const AUTONOMIE_MAX = 150; // Autonomie à 100%
+        let totalDistance = 0;
+        let lastPosition = null;
+        let watchId = null;
+
+        // Charger les données sauvegardées au redémarrage
+        if (localStorage.getItem('moto_distance')) {
+            totalDistance = parseFloat(localStorage.getItem('moto_distance'));
+            updateUI(0, totalDistance);
+        }
+
+        function startApp() {
+            if ("geolocation" in navigator) {
+                document.getElementById('overlay').style.display = 'none';
+                
+                // Configuration haute précision pour la moto
+                watchId = navigator.geolocation.watchPosition(
+                    updatePosition, 
+                    handleError, 
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 5000,
+                        maximumAge: 0
+                    }
+                );
+                
+                // Empêcher l'écran de se mettre en veille (si supporté par le navigateur)
+                if (navigator.wakeLock) {
+                    navigator.wakeLock.request('screen').catch(err => console.log("WakeLock non supporté ou refusé"));
+                }
+            } else {
+                alert("Le GPS n'est pas supporté par votre appareil.");
+            }
+        }
+
+        function updatePosition(position) {
+            // 1. Gestion de la vitesse (convertie de m/s en km/h)
+            let speedKmh = 0;
+            if (position.coords.speed !== null && position.coords.speed > 0) {
+                speedKmh = Math.round(position.coords.speed * 3.6);
+            }
+
+            // 2. Calcul de la distance parcourue
+            if (lastPosition) {
+                let dist = calculateDistance(
+                    lastPosition.coords.latitude, 
+                    lastPosition.coords.longitude,
+                    position.coords.latitude, 
+                    position.coords.longitude
+                );
+                
+                // Filtrer les sauts GPS aberrants à l'arrêt
+                if (speedKmh > 2 || dist > 0.005) { 
+                    totalDistance += dist;
+                    localStorage.setItem('moto_distance', totalDistance);
+                }
+            }
+            
+            lastPosition = position;
+            updateUI(speedKmh, totalDistance);
+        }
+
+        // Calcul de distance entre deux coordonnées (Formule de Haversine)
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Rayon de la terre en km
+            let dLat = (lat2 - lat1) * Math.PI / 180;
+            let dLon = (lon2 - lon1) * Math.PI / 180;
+            let a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+            let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function updateUI(speed, distance) {
+            document.getElementById('speed').innerText = speed;
+            document.getElementById('distance').innerText = distance.toFixed(1);
+            
+            // Calcul de l'autonomie restante
+            let rangeRemaining = AUTONOMIE_MAX - distance;
+            if (rangeRemaining < 0) rangeRemaining = 0;
+            
+            document.getElementById('range').innerText = Math.round(rangeRemaining);
+            
+            // Changement de couleur si l'autonomie devient critique (< 30km)
+            if (rangeRemaining < 30) {
+                document.getElementById('range').style.color = '#ff3b30';
+            } else {
+                document.getElementById('range').style.color = '#ffffff';
+            }
+        }
+
+        function resetTrip() {
+            if (confirm("Réinitialiser l'autonomie (Batterie 100%) ?")) {
+                totalDistance = 0;
+                lastPosition = null;
+                localStorage.setItem('moto_distance', totalDistance);
+                updateUI(0, totalDistance);
+            }
+        }
+
+        function handleError(error) {
+            console.warn(`Erreur GPS (${error.code}): ${error.message}`);
+        }
+    </script>
+</body>
+</html>
