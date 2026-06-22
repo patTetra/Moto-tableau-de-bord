@@ -90,8 +90,8 @@
             font-variant-numeric: tabular-nums;
         }
 
-        /* Bouton de configuration de la batterie */
-        .btn-battery {
+        /* Bouton Menu d'actions */
+        .btn-action {
             background-color: #242429;
             color: white;
             border: 1px solid #3a3a4c;
@@ -104,7 +104,7 @@
             transition: background-color 0.2s;
         }
 
-        .btn-battery:active {
+        .btn-action:active {
             background-color: #3a3a4c;
         }
 
@@ -160,16 +160,15 @@
         </div>
     </div>
 
-    <button class="btn-battery" onclick="setBatteryPercentage()">Ajuster Batterie (%)</button>
+    <button class="btn-action" onclick="showResetMenu()">Options de Réinitialisation</button>
 
     <script>
-        const AUTONOMIE_MAX = 150; // Autonomie max à 100% de batterie
-        let totalDistance = 0; // Distance accumulée sur ce cycle
-        let startingRange = AUTONOMIE_MAX; // Autonomie de départ définie par l'utilisateur
+        const AUTONOMIE_MAX = 150; 
+        let totalDistance = 0; 
+        let startingRange = AUTONOMIE_MAX; 
         let lastPosition = null;
         let watchId = null;
 
-        // Charger les données sauvegardées au redémarrage de l'app
         if (localStorage.getItem('moto_distance')) {
             totalDistance = parseFloat(localStorage.getItem('moto_distance'));
         }
@@ -177,7 +176,6 @@
             startingRange = parseFloat(localStorage.getItem('moto_starting_range'));
         }
         
-        // Premier affichage au chargement
         updateUI(0, totalDistance);
 
         function startApp() {
@@ -216,7 +214,6 @@
                     position.coords.longitude
                 );
                 
-                // Filtrer les imprécisions GPS à l'arrêt
                 if (speedKmh > 2 || dist > 0.005) { 
                     totalDistance += dist;
                     localStorage.setItem('moto_distance', totalDistance);
@@ -242,45 +239,55 @@
             document.getElementById('speed').innerText = speed;
             document.getElementById('distance').innerText = distance.toFixed(1);
             
-            // L'autonomie restante est l'autonomie initialement configurée MOINS les kilomètres parcourus depuis
             let rangeRemaining = startingRange - distance;
             if (rangeRemaining < 0) rangeRemaining = 0;
             
             document.getElementById('range').innerText = Math.round(rangeRemaining);
             
             if (rangeRemaining < 30) {
-                document.getElementById('range').style.color = '#ff3b30'; // Rouge sous 30km
+                document.getElementById('range').style.color = '#ff3b30'; 
             } else {
                 document.getElementById('range').style.color = '#ffffff';
             }
         }
 
-        function setBatteryPercentage() {
-            // Demande le pourcentage à l'utilisateur
-            let input = prompt("Entrez le pourcentage de batterie actuel (0 à 100) :", "100");
-            
-            if (input !== null) {
-                let percentage = parseInt(input, 10);
-                
-                if (!isNaN(percentage) && percentage >= 0 && percentage <= 100) {
-                    // Calcul de la nouvelle autonomie théorique de départ
-                    startingRange = (percentage / 100) * AUTONOMIE_MAX;
-                    // On remet la distance parcourue à zéro pour ce nouveau cycle
-                    totalDistance = 0; 
-                    
-                    // Sauvegarde locale
-                    localStorage.setItem('moto_starting_range', startingRange);
-                    localStorage.setItem('moto_distance', totalDistance);
-                    
-                    // Réinitialisation du dernier point GPS pour éviter les sauts de distance
-                    lastPosition = null;
-                    
-                    // Mise à jour immédiate de l'écran
-                    updateUI(0, totalDistance);
-                } else {
-                    alert("Veuillez entrer un nombre valide entre 0 et 100.");
+        function showResetMenu() {
+            // Boîte de dialogue de choix principale
+            let choix = prompt(
+                "Choisissez une option :\n\n" +
+                "1 : Remettre à zéro (Plein 100% / 150km)\n" +
+                "2 : Saisir manuellement le % de batterie\n\n" +
+                "Entrez 1 ou 2 :", 
+                "1"
+            );
+
+            if (choix === "1") {
+                // Option 1 : Reset complet classique
+                startingRange = AUTONOMIE_MAX;
+                totalDistance = 0;
+                saveAndRefresh();
+            } else if (choix === "2") {
+                // Option 2 : Ajustement au % près
+                let inputPercent = prompt("Entrez le pourcentage de batterie actuel (0 à 100) :", "100");
+                if (inputPercent !== null) {
+                    let percentage = parseInt(inputPercent, 10);
+                    if (!isNaN(percentage) && percentage >= 0 && percentage <= 100) {
+                        startingRange = (percentage / 100) * AUTONOMIE_MAX;
+                        totalDistance = 0; // Remet aussi le kilométrage fait depuis à 0
+                        saveAndRefresh();
+                    } else {
+                        alert("Veuillez entrer un nombre valide entre 0 et 100.");
+                    }
                 }
             }
+        }
+
+        // Centralisation des sauvegardes et de la mise à jour de l'écran
+        function saveAndRefresh() {
+            localStorage.setItem('moto_starting_range', startingRange);
+            localStorage.setItem('moto_distance', totalDistance);
+            lastPosition = null; // Évite d'additionner un saut de distance GPS erroné
+            updateUI(0, totalDistance);
         }
 
         function handleError(error) {
