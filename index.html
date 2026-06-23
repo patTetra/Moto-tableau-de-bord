@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Moto Dash</title>
+    <title>Moto Dash & GPX</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
             --bg-color: #0a0a0a;
@@ -30,14 +31,22 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
-            padding: calc(env(safe-area-inset-top) + 20px) 20px calc(env(safe-area-inset-bottom) + 20px) 20px;
+            padding: calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 10px) 10px;
             overflow: hidden;
         }
 
-        /* Section Vitesse */
-        .speed-container {
-            flex: 1;
+        /* Top Dash */
+        .top-dash {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 10px;
+            height: 140px;
+            margin-bottom: 10px;
+        }
+
+        .speed-card {
+            background-color: var(--card-bg);
+            border-radius: 14px;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -45,129 +54,143 @@
         }
 
         .speed-value {
-            font-size: 32vw;
-            font-weight: 700;
-            line-height: 0.9;
+            font-size: 4rem;
+            font-weight: 800;
+            line-height: 1;
             color: var(--accent-color);
             font-variant-numeric: tabular-nums;
         }
 
         .speed-unit {
-            font-size: 1.5rem;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            color: var(--text-muted);
-            margin-top: 5px;
-        }
-
-        /* Section Autonomie / Stats */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .card {
-            background-color: var(--card-bg);
-            border-radius: 16px;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-
-        .card-label {
             font-size: 0.9rem;
             color: var(--text-muted);
-            text-transform: uppercase;
-            margin-bottom: 5px;
             letter-spacing: 1px;
         }
 
-        .card-value {
-            font-size: 2.2rem;
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
+        .stats-stack {
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            gap: 10px;
         }
 
-        /* Bouton Menu d'actions */
-        .btn-action {
-            background-color: #242429;
+        .mini-card {
+            background-color: var(--card-bg);
+            border-radius: 14px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding-left: 15px;
+        }
+
+        .mini-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .mini-value {
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+
+        /* Carte */
+        #map {
+            flex: 1;
+            border-radius: 14px;
+            background-color: #111;
+            z-index: 1;
+        }
+
+        /* Boutons */
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .btn {
             color: white;
-            border: 1px solid #3a3a4c;
-            border-radius: 12px;
-            padding: 15px;
-            font-size: 1.1rem;
+            border: none;
+            border-radius: 10px;
+            padding: 14px 5px;
+            font-size: 0.85rem;
             font-weight: 600;
-            width: 100%;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-            transition: background-color 0.2s;
+            text-align: center;
         }
 
-        .btn-action:active {
-            background-color: #3a3a4c;
-        }
+        .btn-gray { background-color: #242429; border: 1px solid #3a3a4c; }
+        .btn-blue { background-color: #007aff; }
+        .btn-green { background-color: #34c759; }
 
-        /* Overlay d'erreur/permission */
+        /* Masquer l'input de fichier par défaut, on l'active via le bouton */
+        #gpx-file { display: none; }
+
         #overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.9);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 30px;
-            text-align: center;
-            z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            padding: 30px; text-align: center; z-index: 100;
         }
 
         #overlay button {
-            background: var(--accent-color);
-            color: black;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 30px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            margin-top: 20px;
+            background: var(--accent-color); color: black; border: none;
+            padding: 15px 30px; border-radius: 30px; font-size: 1.2rem; font-weight: bold; margin-top: 20px;
+        }
+
+        .leaflet-layer, .leaflet-control-zoom {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
         }
     </style>
 </head>
 <body>
 
     <div id="overlay">
-        <h2>Moto Dash</h2>
-        <p style="margin-top: 15px; color: var(--text-muted);">Cette application nécessite l'accès à votre position GPS pour calculer la vitesse et la distance.</p>
+        <h2>Moto Dash & GPX</h2>
+        <p style="margin-top: 15px; color: var(--text-muted);">L'accès GPS est nécessaire pour exploiter le compteur et la carte.</p>
         <button onclick="startApp()">Activer le GPS</button>
     </div>
 
-    <div class="speed-container">
-        <div id="speed" class="speed-value">0</div>
-        <div class="speed-unit">km/h</div>
+    <div class="top-dash">
+        <div class="speed-card">
+            <div id="speed" class="speed-value">0</div>
+            <div class="speed-unit">km/h</div>
+        </div>
+        <div class="stats-stack">
+            <div class="mini-card">
+                <div class="mini-label">Parcouru</div>
+                <div><span id="distance" class="mini-value">0.0</span> <span style="font-size:0.8rem; color:var(--text-muted);">km</span></div>
+            </div>
+            <div class="mini-card">
+                <div class="mini-label">Autonomie</div>
+                <div><span id="range" class="mini-value">150</span> <span style="font-size:0.8rem; color:var(--text-muted);">km restants</span></div>
+            </div>
+        </div>
     </div>
 
-    <div class="stats-grid">
-        <div class="card">
-            <div class="card-label">Parcouru</div>
-            <div id="distance" class="card-value">0.0</div>
-            <div style="font-size: 0.8rem; color: var(--text-muted);">km</div>
-        </div>
-        <div class="card">
-            <div class="card-label">Autonomie</div>
-            <div id="range" class="card-value">150</div>
-            <div style="font-size: 0.8rem; color: var(--text-muted);">km restants</div>
-        </div>
+    <div id="map"></div>
+
+    <div class="controls">
+        <button class="btn btn-gray" onclick="showResetMenu()">Reset</button>
+        <button class="btn btn-green" onclick="triggerGpxUpload()">Charger GPX</button>
+        <button class="btn btn-blue" onclick="recenterMap()">Recentrer</button>
     </div>
 
-    <button class="btn-action" onclick="showResetMenu()">Options de Réinitialisation</button>
+    <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const AUTONOMIE_MAX = 150; 
         let totalDistance = 0; 
         let startingRange = AUTONOMIE_MAX; 
         let lastPosition = null;
         let watchId = null;
+        
+        let map = null;
+        let marker = null;
+        let gpxLayer = null; // Contiendra le tracé GPX importé
+        let autoCenter = true;
 
         if (localStorage.getItem('moto_distance')) {
             totalDistance = parseFloat(localStorage.getItem('moto_distance'));
@@ -178,121 +201,173 @@
         
         updateUI(0, totalDistance);
 
+        function initMap() {
+            map = L.map('map', { zoomControl: false }).setView([46.2276, 2.2137], 13);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap'
+            }).addTo(map);
+
+            marker = L.circleMarker([0, 0], {
+                radius: 8, fillColor: '#007aff', color: '#ffffff', weight: 2, opacity: 1, fillOpacity: 1
+            }).addTo(map);
+
+            map.on('movestart', () => { autoCenter = false; });
+
+            // Recharger le GPX s'il y en avait un en mémoire
+            if (localStorage.getItem('moto_gpx_data')) {
+                parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
+            }
+        }
+
         function startApp() {
             if ("geolocation" in navigator) {
                 document.getElementById('overlay').style.display = 'none';
-                
-                watchId = navigator.geolocation.watchPosition(
-                    updatePosition, 
-                    handleError, 
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 5000,
-                        maximumAge: 0
-                    }
-                );
-                
-                if (navigator.wakeLock) {
-                    navigator.wakeLock.request('screen').catch(err => console.log("WakeLock refusé"));
-                }
-            } else {
-                alert("Le GPS n'est pas supporté par votre appareil.");
+                initMap();
+                watchId = navigator.geolocation.watchPosition(updatePosition, handleError, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
+                if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(() => {});
             }
         }
 
         function updatePosition(position) {
+            let lat = position.coords.latitude;
+            let lon = position.coords.longitude;
             let speedKmh = 0;
+
             if (position.coords.speed !== null && position.coords.speed > 0) {
                 speedKmh = Math.round(position.coords.speed * 3.6);
             }
 
+            if (map) {
+                marker.setLatLng([lat, lon]);
+                if (autoCenter) {
+                    map.setView([lat, lon], 15);
+                }
+            }
+
             if (lastPosition) {
-                let dist = calculateDistance(
-                    lastPosition.coords.latitude, 
-                    lastPosition.coords.longitude,
-                    position.coords.latitude, 
-                    position.coords.longitude
-                );
-                
+                let dist = calculateDistance(lastPosition.coords.latitude, lastPosition.coords.longitude, lat, lon);
                 if (speedKmh > 2 || dist > 0.005) { 
                     totalDistance += dist;
                     localStorage.setItem('moto_distance', totalDistance);
                 }
+            } else if (!localStorage.getItem('moto_gpx_data')) {
+                map.setView([lat, lon], 15);
             }
             
             lastPosition = position;
             updateUI(speedKmh, totalDistance);
         }
 
+        function triggerGpxUpload() {
+            document.getElementById('gpx-file').click();
+        }
+
+        function handleGpxFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const gpxText = e.target.result;
+                localStorage.setItem('moto_gpx_data', gpxText); // Sauvegarde
+                parseAndDrawGpx(gpxText, true);
+            };
+            reader.readAsText(file);
+        }
+
+        // Analyseur GPX ultra léger natif (sans librairie externe lourde)
+        function parseAndDrawGpx(xmlText, fitBounds) {
+            try {
+                if (gpxLayer) map.removeLayer(gpxLayer);
+
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+                const trkpts = xmlDoc.getElementsByTagName("trkpt");
+                let points = [];
+
+                for (let i = 0; i < trkpts.length; i++) {
+                    let lat = parseFloat(trkpts[i].getAttribute("lat"));
+                    let lon = parseFloat(trkpts[i].getAttribute("lon"));
+                    if (!isNaN(lat) && !isNaN(lon)) {
+                        points.push([lat, lon]);
+                    }
+                }
+
+                if (points.length > 0) {
+                    // Dessiner le tracé de la balade en bleu électrique pour une bonne visibilité
+                    gpxLayer = L.polyline(points, {color: '#00ccff', weight: 6, opacity: 0.8}).addTo(map);
+                    
+                    if (fitBounds) {
+                        map.fitBounds(gpxLayer.getBounds());
+                        autoCenter = false; // Laisse l'utilisateur voir sa trace chargée
+                    }
+                } else {
+                    alert("Aucun point de tracé valide trouvé dans ce fichier GPX.");
+                }
+            } catch (err) {
+                alert("Erreur lors de la lecture du fichier GPX.");
+                console.error(err);
+            }
+        }
+
+        function recenterMap() {
+            autoCenter = true;
+            if (lastPosition) {
+                map.setView([lastPosition.coords.latitude, lastPosition.coords.longitude], 15);
+            }
+        }
+
         function calculateDistance(lat1, lon1, lat2, lon2) {
             const R = 6371; 
-            let dLat = (lat2 - lat1) * Math.PI / 180;
-            let dLon = (lon2 - lon1) * Math.PI / 180;
-            let a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                    Math.sin(dLon/2) * Math.sin(dLon/2);
-            let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
+            let dLat = (lat2 - lat1) * Math.PI / 180; let dLon = (lon2 - lon1) * Math.PI / 180;
+            let a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
         }
 
         function updateUI(speed, distance) {
             document.getElementById('speed').innerText = speed;
             document.getElementById('distance').innerText = distance.toFixed(1);
-            
             let rangeRemaining = startingRange - distance;
             if (rangeRemaining < 0) rangeRemaining = 0;
-            
             document.getElementById('range').innerText = Math.round(rangeRemaining);
-            
-            if (rangeRemaining < 30) {
-                document.getElementById('range').style.color = '#ff3b30'; 
-            } else {
-                document.getElementById('range').style.color = '#ffffff';
-            }
+            document.getElementById('range').style.color = (rangeRemaining < 30) ? '#ff3b30' : '#ffffff';
         }
 
         function showResetMenu() {
-            // Boîte de dialogue de choix principale
             let choix = prompt(
-                "Choisissez une option :\n\n" +
-                "1 : Remettre à zéro (Plein 100% / 150km)\n" +
-                "2 : Saisir manuellement le % de batterie\n\n" +
-                "Entrez 1 ou 2 :", 
-                "1"
+                "Options :\n\n" +
+                "1 : Remettre à zéro (Plein 100%)\n" +
+                "2 : Saisir le % de batterie\n" +
+                "3 : Supprimer le tracé GPX de l'écran\n\n" +
+                "Entrez un chiffre :", "1"
             );
 
             if (choix === "1") {
-                // Option 1 : Reset complet classique
-                startingRange = AUTONOMIE_MAX;
-                totalDistance = 0;
-                saveAndRefresh();
+                startingRange = AUTONOMIE_MAX; totalDistance = 0; saveAndRefresh();
             } else if (choix === "2") {
-                // Option 2 : Ajustement au % près
-                let inputPercent = prompt("Entrez le pourcentage de batterie actuel (0 à 100) :", "100");
+                let inputPercent = prompt("Pourcentage (0-100) :", "100");
                 if (inputPercent !== null) {
                     let percentage = parseInt(inputPercent, 10);
                     if (!isNaN(percentage) && percentage >= 0 && percentage <= 100) {
-                        startingRange = (percentage / 100) * AUTONOMIE_MAX;
-                        totalDistance = 0; // Remet aussi le kilométrage fait depuis à 0
-                        saveAndRefresh();
-                    } else {
-                        alert("Veuillez entrer un nombre valide entre 0 et 100.");
+                        startingRange = (percentage / 100) * AUTONOMIE_MAX; totalDistance = 0; saveAndRefresh();
                     }
                 }
+            } else if (choix === "3") {
+                if (gpxLayer) map.removeLayer(gpxLayer);
+                localStorage.removeItem('moto_gpx_data');
             }
         }
 
-        // Centralisation des sauvegardes et de la mise à jour de l'écran
         function saveAndRefresh() {
             localStorage.setItem('moto_starting_range', startingRange);
             localStorage.setItem('moto_distance', totalDistance);
-            lastPosition = null; // Évite d'additionner un saut de distance GPS erroné
+            lastPosition = null;
             updateUI(0, totalDistance);
         }
 
-        function handleError(error) {
-            console.warn(`Erreur GPS (${error.code}): ${error.message}`);
-        }
+        function handleError(error) { console.warn(`GPS Error: ${error.message}`); }
     </script>
 </body>
 </html>
