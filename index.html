@@ -93,12 +93,20 @@
             font-weight: 600;
         }
 
-        /* Carte */
-        #map {
+        /* Conteneur Carte */
+        #map-container {
             flex: 1;
+            position: relative;
             border-radius: 14px;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
             background-color: #111;
             z-index: 1;
+            transition: transform 0.2s ease-out; /* Transition fluide pour la rotation */
         }
 
         /* Boutons */
@@ -123,7 +131,6 @@
         .btn-blue { background-color: #007aff; }
         .btn-green { background-color: #34c759; }
 
-        /* Masquer l'input de fichier par défaut, on l'active via le bouton */
         #gpx-file { display: none; }
 
         #overlay {
@@ -142,13 +149,24 @@
         .leaflet-layer, .leaflet-control-zoom {
             filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
         }
+
+        /* Flèche de direction au centre du marqueur */
+        .arrow-marker {
+            width: 0;
+            height: 0;
+            border-left: 7px solid transparent;
+            border-right: 7px solid transparent;
+            border-bottom: 20px solid #007aff;
+            filter: drop-shadow(0px 0px 2px #fff);
+            transition: transform 0.1s linear;
+        }
     </style>
 </head>
 <body>
 
     <div id="overlay">
         <h2>Moto Dash & GPX</h2>
-        <p style="margin-top: 15px; color: var(--text-muted);">L'accès GPS est nécessaire pour exploiter le compteur et la carte.</p>
+        <p style="margin-top: 15px; color: var(--text-muted);">L'accès GPS est nécessaire pour exploiter le compteur, le cap et la carte.</p>
         <button onclick="startApp()">Activer le GPS</button>
     </div>
 
@@ -169,7 +187,9 @@
         </div>
     </div>
 
-    <div id="map"></div>
+    <div id="map-container">
+        <div id="map"></div>
+    </div>
 
     <div class="controls">
         <button class="btn btn-gray" onclick="showResetMenu()">Reset</button>
@@ -189,8 +209,11 @@
         
         let map = null;
         let marker = null;
-        let gpxLayer = null; // Contiendra le tracé GPX importé
+        let gpxLayer = null; 
+        
         let autoCenter = true;
+        let autoCenterTimeout = null;
+        let currentHeading = 0;
 
         if (localStorage.getItem('moto_distance')) {
             totalDistance = parseFloat(localStorage.getItem('moto_distance'));
@@ -202,20 +225,37 @@
         updateUI(0, totalDistance);
 
         function initMap() {
-            map = L.map('map', { zoomControl: false }).setView([46.2276, 2.2137], 13);
+            map = L.map('map', { 
+                zoomControl: false,
+                inertia: false
+            }).setView([46.2276, 2.2137], 13);
             
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '© OpenStreetMap'
             }).addTo(map);
 
-            marker = L.circleMarker([0, 0], {
-                radius: 8, fillColor: '#007aff', color: '#ffffff', weight: 2, opacity: 1, fillOpacity: 1
-            }).addTo(map);
+            // Remplacement du point par une flèche directionnelle pour la moto
+            const arrowIcon = L.divIcon({
+                className: 'custom-arrow-container',
+                html: '<div id="moto-arrow" class="arrow-marker"></div>',
+                iconSize: [14, 20],
+                iconAnchor: [7, 10]
+            });
 
-            map.on('movestart', () => { autoCenter = false; });
+            marker = L.marker([0, 0], { icon: arrowIcon }).addTo(map);
 
-            // Recharger le GPX s'il y en avait un en mémoire
+            // Si l'utilisateur touche la carte, on coupe la rotation et le suivi
+            map.on('dragstart zoomstart', () => { 
+                autoCenter = false; 
+                clearTimeout(autoCenterTimeout);
+                rotateMap(0); // Remet la carte droite pour faciliter l'exploration manuelle
+                
+                autoCenterTimeout = setTimeout(() => {
+                    autoCenter = true;
+                }, 6000);
+            });
+
             if (localStorage.getItem('moto_gpx_data')) {
                 parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
             }
@@ -225,8 +265,27 @@
             if ("geolocation" in navigator) {
                 document.getElementById('overlay').style.display = 'none';
                 initMap();
-                watchId = navigator.geolocation.watchPosition(updatePosition, handleError, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
+                watchId = navigator.geolocation.watchPosition(updatePosition, handleError, { 
+                    enableHighAccuracy: true, 
+                    timeout: 10000, 
+                    maximumAge: 0 
+                });
                 if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(() => {});
+            }
+        }
+
+        function rotateMap(heading) {
+            const mapEl = document.getElementById('map');
+            const arrowEl = document.getElementById('moto-arrow');
+            
+            if (autoCenter && heading !== null && heading !== undefined) {
+                // Fait pivoter l'élément HTML de la carte à l'opposé du cap pour que la route soit face à l'utilisateur
+                mapEl.style.transform = `rotate(${-heading}deg)`;
+                // Garde la flèche pointant toujours vers le "haut" de l'écran (le sens de marche)
+                if (arrowEl) arrowEl.style.transform = `rotate(${heading}deg)`;
+            } else {
+                mapEl.style.transform = `rotate(0deg)`;
+                if (arrowEl) arrowEl.style.transform = `rotate(${currentHeading}deg)`;
             }
         }
 
@@ -239,10 +298,16 @@
                 speedKmh = Math.round(position.coords.speed * 3.6);
             }
 
+            // Récupération du cap fourni par le GPS (coordonnées d'angle entre 0 et 360°)
+            if (position.coords.heading !== null && !isNaN(position.coords.heading) && speedKmh > 5) {
+                currentHeading = position.coords.heading;
+            }
+
             if (map) {
                 marker.setLatLng([lat, lon]);
                 if (autoCenter) {
-                    map.setView([lat, lon], 15);
+                    map.setView([lat, lon], 16);
+                    rotateMap(currentHeading);
                 }
             }
 
@@ -253,7 +318,7 @@
                     localStorage.setItem('moto_distance', totalDistance);
                 }
             } else if (!localStorage.getItem('moto_gpx_data')) {
-                map.setView([lat, lon], 15);
+                map.setView([lat, lon], 16);
             }
             
             lastPosition = position;
@@ -271,13 +336,12 @@
             const reader = new FileReader();
             reader.onload = function(e) {
                 const gpxText = e.target.result;
-                localStorage.setItem('moto_gpx_data', gpxText); // Sauvegarde
+                localStorage.setItem('moto_gpx_data', gpxText); 
                 parseAndDrawGpx(gpxText, true);
             };
             reader.readAsText(file);
         }
 
-        // Analyseur GPX ultra léger natif (sans librairie externe lourde)
         function parseAndDrawGpx(xmlText, fitBounds) {
             try {
                 if (gpxLayer) map.removeLayer(gpxLayer);
@@ -296,26 +360,28 @@
                 }
 
                 if (points.length > 0) {
-                    // Dessiner le tracé de la balade en bleu électrique pour une bonne visibilité
                     gpxLayer = L.polyline(points, {color: '#00ccff', weight: 6, opacity: 0.8}).addTo(map);
                     
                     if (fitBounds) {
+                        autoCenter = false; 
+                        rotateMap(0);
                         map.fitBounds(gpxLayer.getBounds());
-                        autoCenter = false; // Laisse l'utilisateur voir sa trace chargée
+                        clearTimeout(autoCenterTimeout);
+                        autoCenterTimeout = setTimeout(() => { autoCenter = true; }, 8000);
                     }
                 } else {
                     alert("Aucun point de tracé valide trouvé dans ce fichier GPX.");
                 }
             } catch (err) {
                 alert("Erreur lors de la lecture du fichier GPX.");
-                console.error(err);
             }
         }
 
         function recenterMap() {
             autoCenter = true;
             if (lastPosition) {
-                map.setView([lastPosition.coords.latitude, lastPosition.coords.longitude], 15);
+                map.setView([lastPosition.coords.latitude, lastPosition.coords.longitude], 16);
+                rotateMap(currentHeading);
             }
         }
 
