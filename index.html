@@ -6,7 +6,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Moto Dash & GPX</title>
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         /* MODE JOUR PAR DÉFAUT */
@@ -17,7 +16,7 @@
             --text-color: #000000;
             --text-muted: #8e8e93;
             --map-invert: invert(0%) hue-rotate(0deg);
-            --arrow-color: #ff3b30; /* Rouge vif le jour */
+            --arrow-color: #ff3b30; 
             --gpx-color: #0055ff;   
         }
 
@@ -26,11 +25,11 @@
             :root:not(.force-light) {
                 --bg-color: #0a0a0a;
                 --card-bg: #16161a;
-                --accent-color: #00ff66; /* Vert fluo la nuit */
+                --accent-color: #00ff66; 
                 --text-color: #ffffff;
                 --text-muted: #8e8e93;
                 --map-invert: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
-                --arrow-color: #00ff66; /* Vert fluo pour la flèche la nuit */
+                --arrow-color: #00ff66; 
                 --gpx-color: #00ccff;   
             }
         }
@@ -189,7 +188,6 @@
 
         .leaflet-control-zoom { display: none; }
 
-        /* FLÈCHE MOTO GROSSE ET ULTRA VISIBLE */
         .custom-arrow-container {
             display: flex;
             justify-content: center;
@@ -199,10 +197,10 @@
         .arrow-marker {
             width: 0;
             height: 0;
-            border-left: 14px solid transparent;  /* Agrandie */
-            border-right: 14px solid transparent; /* Agrandie */
-            border-bottom: 38px solid var(--arrow-color); /* Agrandie */
-            filter: drop-shadow(0px 4px 5px rgba(0,0,0,0.5)) drop-shadow(0px 0px 1px #fff); /* Ombre + contour blanc net */
+            border-left: 14px solid transparent;  
+            border-right: 14px solid transparent; 
+            border-bottom: 38px solid var(--arrow-color); 
+            filter: drop-shadow(0px 4px 5px rgba(0,0,0,0.5)) drop-shadow(0px 0px 1px #fff); 
             transition: transform 0.1s linear, border-bottom-color 0.3s;
         }
     </style>
@@ -227,7 +225,7 @@
             </div>
             <div class="mini-card">
                 <div class="mini-label">Autonomie</div>
-                <div><span id="range" class="mini-value">150</span> <span style="font-size:0.8rem; color:var(--text-muted);">km restants</span></div>
+                <div><span id="range" class="mini-value">170</span> <span style="font-size:0.8rem; color:var(--text-muted);">km restants</span></div>
             </div>
         </div>
     </div>
@@ -244,19 +242,18 @@
 
     <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const AUTONOMIE_MAX = 150; 
+        const AUTONOMIE_MAX = 170; // Calibré sur ton test réel (145km à 84% consommés)
         let totalDistance = 0; 
-        let startingRange = AUTONOMIE_MAX; 
+        let currentRange = AUTONOMIE_MAX; 
         let lastPosition = null;
         let watchId = null;
         
         let map = null;
         let marker = null;
         let gpxLayer = null; 
-        let gpxPoints = []; // Stockage global des points originaux du GPX
+        let gpxPoints = []; 
         
         let autoCenter = true;
         let autoCenterTimeout = null;
@@ -269,8 +266,8 @@
         if (localStorage.getItem('moto_distance')) {
             totalDistance = parseFloat(localStorage.getItem('moto_distance'));
         }
-        if (localStorage.getItem('moto_starting_range')) {
-            startingRange = parseFloat(localStorage.getItem('moto_starting_range'));
+        if (localStorage.getItem('moto_current_range')) {
+            currentRange = parseFloat(localStorage.getItem('moto_current_range'));
         }
         
         updateUI(0, totalDistance);
@@ -283,7 +280,6 @@
                 attribution: '© OpenStreetMap'
             }).addTo(map);
 
-            // Ancrage ajusté pour la nouvelle taille de flèche
             const arrowIcon = L.divIcon({
                 className: 'custom-arrow-container',
                 html: '<div id="moto-arrow" class="arrow-marker"></div>',
@@ -348,8 +344,6 @@
                     map.setView([lat, lon], 16);
                     rotateMap(currentHeading);
                 }
-                
-                // Si un GPX est chargé, on nettoie ce qui est derrière nous
                 if (gpxPoints.length > 0) {
                     cleanPassedGpxPoints(lat, lon);
                 }
@@ -357,9 +351,28 @@
 
             if (lastPosition) {
                 let dist = calculateDistance(lastPosition.coords.latitude, lastPosition.coords.longitude, lat, lon);
+                
                 if (speedKmh > 2 || dist > 0.005) { 
                     totalDistance += dist;
+                    
+                    // CALCUL DE LA CONSOMMATION DYNAMIQUE CALIBRÉ POUR LA REZON BOHEMIA
+                    let penaltyFactor = 1.0;
+                    if (speedKmh < 40) {
+                        penaltyFactor = 0.80;  // Ville / Mode Éco tranquille
+                    } else if (speedKmh >= 40 && speedKmh < 80) {
+                        penaltyFactor = 1.00;  // Départementale / Mode Confort (Nominal)
+                    } else if (speedKmh >= 80 && speedKmh < 95) {
+                        penaltyFactor = 1.25;  // Voie rapide intermédiaire
+                    } else if (speedKmh >= 95) {
+                        penaltyFactor = 1.85;  // Voie rapide 110 km/h / Mode Sport (Résistance air max)
+                    }
+
+                    // Déduction pondérée de l'autonomie restante
+                    currentRange -= (dist * penaltyFactor);
+                    if (currentRange < 0) currentRange = 0;
+
                     localStorage.setItem('moto_distance', totalDistance);
+                    localStorage.setItem('moto_current_range', currentRange);
                 }
             }
             
@@ -399,7 +412,6 @@
             } catch (err) {}
         }
 
-        // Fonction isolée pour redessiner la ligne avec les points restants
         function drawGpxPolyline(fitBounds) {
             if (gpxPoints.length > 0) {
                 if (gpxLayer) map.removeLayer(gpxLayer);
@@ -417,14 +429,11 @@
             }
         }
 
-        // ALGORYTHME D'EFFACEMENT DU TRACÉ AU FUR ET À MESURE
         function cleanPassedGpxPoints(currentLat, currentLon) {
             if (gpxPoints.length === 0) return;
-
             let closestIndex = -1;
             let minDistance = Infinity;
 
-            // Cherche le point de la trace le plus proche de la moto (dans une limite de 150 mètres max)
             for (let i = 0; i < gpxPoints.length; i++) {
                 let dist = calculateDistance(currentLat, currentLon, gpxPoints[i][0], gpxPoints[i][1]);
                 if (dist < minDistance) {
@@ -433,10 +442,9 @@
                 }
             }
 
-            // Si on est à côté de la trace (moins de 150 mètres), on supprime tout ce qui précède ce point
             if (closestIndex > 0 && minDistance < 0.150) {
-                gpxPoints.splice(0, closestIndex); // Supprime les anciens points du tableau
-                drawGpxPolyline(false);            // Redessine la ligne mise à jour
+                gpxPoints.splice(0, closestIndex); 
+                drawGpxPolyline(false);            
             }
         }
 
@@ -458,12 +466,10 @@
         function updateUI(speed, distance) {
             document.getElementById('speed').innerText = speed;
             document.getElementById('distance').innerText = distance.toFixed(1);
-            let rangeRemaining = startingRange - distance;
-            if (rangeRemaining < 0) rangeRemaining = 0;
-            document.getElementById('range').innerText = Math.round(rangeRemaining);
             
+            document.getElementById('range').innerText = Math.round(currentRange);
             const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-color').trim();
-            document.getElementById('range').style.color = (rangeRemaining < 30) ? '#ff3b30' : textColor;
+            document.getElementById('range').style.color = (currentRange < 30) ? '#ff3b30' : textColor;
         }
 
         function showResetMenu() {
@@ -477,13 +483,13 @@
             );
 
             if (choix === "1") {
-                startingRange = AUTONOMIE_MAX; totalDistance = 0; saveAndRefresh();
+                currentRange = AUTONOMIE_MAX; totalDistance = 0; saveAndRefresh();
             } else if (choix === "2") {
                 let inputPercent = prompt("Pourcentage (0-100) :", "100");
                 if (inputPercent !== null) {
                     let percentage = parseInt(inputPercent, 10);
                     if (!isNaN(percentage) && percentage >= 0 && percentage <= 100) {
-                        startingRange = (percentage / 100) * AUTONOMIE_MAX; totalDistance = 0; saveAndRefresh();
+                        currentRange = (percentage / 100) * AUTONOMIE_MAX; totalDistance = 0; saveAndRefresh();
                     }
                 }
             } else if (choix === "3") {
@@ -505,7 +511,7 @@
         }
 
         function saveAndRefresh() {
-            localStorage.setItem('moto_starting_range', startingRange);
+            localStorage.setItem('moto_current_range', currentRange);
             localStorage.setItem('moto_distance', totalDistance);
             lastPosition = null;
             updateUI(0, totalDistance);
