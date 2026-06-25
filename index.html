@@ -17,8 +17,8 @@
             --text-color: #000000;
             --text-muted: #8e8e93;
             --map-invert: invert(0%) hue-rotate(0deg);
-            --arrow-color: #ff3b30; /* Flèche rouge le jour */
-            --gpx-color: #0055ff;   /* Tracé bleu le jour */
+            --arrow-color: #ff3b30; /* Rouge vif le jour */
+            --gpx-color: #0055ff;   
         }
 
         /* AUTO-BASCULEMENT EN MODE SOMBRE VIA LES RÉGLAGES IPHONE */
@@ -30,8 +30,8 @@
                 --text-color: #ffffff;
                 --text-muted: #8e8e93;
                 --map-invert: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
-                --arrow-color: #007aff; /* Flèche bleue la nuit */
-                --gpx-color: #00ccff;   /* Tracé cyan la nuit */
+                --arrow-color: #00ff66; /* Vert fluo pour la flèche la nuit */
+                --gpx-color: #00ccff;   
             }
         }
 
@@ -43,7 +43,7 @@
             --text-color: #ffffff;
             --text-muted: #8e8e93;
             --map-invert: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
-            --arrow-color: #007aff;
+            --arrow-color: #00ff66;
             --gpx-color: #00ccff;
         }
 
@@ -144,7 +144,6 @@
             transition: transform 0.2s ease-out;
         }
 
-        /* Application du filtre d'inversion dynamique sur la carte */
         .leaflet-layer {
             filter: var(--map-invert);
         }
@@ -190,14 +189,20 @@
 
         .leaflet-control-zoom { display: none; }
 
-        /* Flèche de direction */
+        /* FLÈCHE MOTO GROSSE ET ULTRA VISIBLE */
+        .custom-arrow-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
         .arrow-marker {
             width: 0;
             height: 0;
-            border-left: 7px solid transparent;
-            border-right: 7px solid transparent;
-            border-bottom: 20px solid var(--arrow-color);
-            filter: drop-shadow(0px 0px 3px rgba(0,0,0,0.4));
+            border-left: 14px solid transparent;  /* Agrandie */
+            border-right: 14px solid transparent; /* Agrandie */
+            border-bottom: 38px solid var(--arrow-color); /* Agrandie */
+            filter: drop-shadow(0px 4px 5px rgba(0,0,0,0.5)) drop-shadow(0px 0px 1px #fff); /* Ombre + contour blanc net */
             transition: transform 0.1s linear, border-bottom-color 0.3s;
         }
     </style>
@@ -251,12 +256,12 @@
         let map = null;
         let marker = null;
         let gpxLayer = null; 
+        let gpxPoints = []; // Stockage global des points originaux du GPX
         
         let autoCenter = true;
         let autoCenterTimeout = null;
         let currentHeading = 0;
 
-        // Charger le choix de thème utilisateur (si sauvegardé)
         if (localStorage.getItem('moto_theme')) {
             document.documentElement.className = localStorage.getItem('moto_theme');
         }
@@ -278,11 +283,12 @@
                 attribution: '© OpenStreetMap'
             }).addTo(map);
 
+            // Ancrage ajusté pour la nouvelle taille de flèche
             const arrowIcon = L.divIcon({
                 className: 'custom-arrow-container',
                 html: '<div id="moto-arrow" class="arrow-marker"></div>',
-                iconSize: [14, 20],
-                iconAnchor: [7, 10]
+                iconSize: [28, 38],
+                iconAnchor: [14, 24] 
             });
 
             marker = L.marker([0, 0], { icon: arrowIcon }).addTo(map);
@@ -342,6 +348,11 @@
                     map.setView([lat, lon], 16);
                     rotateMap(currentHeading);
                 }
+                
+                // Si un GPX est chargé, on nettoie ce qui est derrière nous
+                if (gpxPoints.length > 0) {
+                    cleanPassedGpxPoints(lat, lon);
+                }
             }
 
             if (lastPosition) {
@@ -376,27 +387,57 @@
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(xmlText, "text/xml");
                 const trkpts = xmlDoc.getElementsByTagName("trkpt");
-                let points = [];
+                gpxPoints = [];
 
                 for (let i = 0; i < trkpts.length; i++) {
                     let lat = parseFloat(trkpts[i].getAttribute("lat"));
                     let lon = parseFloat(trkpts[i].getAttribute("lon"));
-                    if (!isNaN(lat) && !isNaN(lon)) points.push([lat, lon]);
+                    if (!isNaN(lat) && !isNaN(lon)) gpxPoints.push([lat, lon]);
                 }
 
-                if (points.length > 0) {
-                    // Utilise la variable CSS pour la couleur de la ligne GPX
-                    const strokeColor = getComputedStyle(document.documentElement).getPropertyValue('--gpx-color').trim();
-                    gpxLayer = L.polyline(points, {color: strokeColor, weight: 6, opacity: 0.85}).addTo(map);
-                    
-                    if (fitBounds) {
-                        autoCenter = false; rotateMap(0);
-                        map.fitBounds(gpxLayer.getBounds());
-                        clearTimeout(autoCenterTimeout);
-                        autoCenterTimeout = setTimeout(() => { autoCenter = true; }, 8000);
-                    }
-                }
+                drawGpxPolyline(fitBounds);
             } catch (err) {}
+        }
+
+        // Fonction isolée pour redessiner la ligne avec les points restants
+        function drawGpxPolyline(fitBounds) {
+            if (gpxPoints.length > 0) {
+                if (gpxLayer) map.removeLayer(gpxLayer);
+                const strokeColor = getComputedStyle(document.documentElement).getPropertyValue('--gpx-color').trim();
+                gpxLayer = L.polyline(gpxPoints, {color: strokeColor, weight: 7, opacity: 0.85}).addTo(map);
+                
+                if (fitBounds) {
+                    autoCenter = false; rotateMap(0);
+                    map.fitBounds(gpxLayer.getBounds());
+                    clearTimeout(autoCenterTimeout);
+                    autoCenterTimeout = setTimeout(() => { autoCenter = true; }, 8000);
+                }
+            } else if (gpxLayer) {
+                map.removeLayer(gpxLayer);
+            }
+        }
+
+        // ALGORYTHME D'EFFACEMENT DU TRACÉ AU FUR ET À MESURE
+        function cleanPassedGpxPoints(currentLat, currentLon) {
+            if (gpxPoints.length === 0) return;
+
+            let closestIndex = -1;
+            let minDistance = Infinity;
+
+            // Cherche le point de la trace le plus proche de la moto (dans une limite de 150 mètres max)
+            for (let i = 0; i < gpxPoints.length; i++) {
+                let dist = calculateDistance(currentLat, currentLon, gpxPoints[i][0], gpxPoints[i][1]);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    closestIndex = i;
+                }
+            }
+
+            // Si on est à côté de la trace (moins de 150 mètres), on supprime tout ce qui précède ce point
+            if (closestIndex > 0 && minDistance < 0.150) {
+                gpxPoints.splice(0, closestIndex); // Supprime les anciens points du tableau
+                drawGpxPolyline(false);            // Redessine la ligne mise à jour
+            }
         }
 
         function recenterMap() {
@@ -446,6 +487,7 @@
                     }
                 }
             } else if (choix === "3") {
+                gpxPoints = [];
                 if (gpxLayer) map.removeLayer(gpxLayer);
                 localStorage.removeItem('moto_gpx_data');
             } else if (choix === "4") {
@@ -457,7 +499,6 @@
                 } else if (themeChoice === "3") {
                     document.documentElement.className = "force-dark"; localStorage.setItem('moto_theme', 'force-dark');
                 }
-                // Réappliquer le tracé GPX pour mettre à jour sa couleur
                 if (localStorage.getItem('moto_gpx_data')) parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
                 updateUI(0, totalDistance);
             }
