@@ -6,7 +6,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Moto Dash & GPX</title>
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         /* MODE JOUR PAR DÉFAUT */
@@ -32,7 +31,7 @@
                 --text-muted: #8e8e93;
                 --map-invert: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
                 --arrow-color: #00ff66; 
-                --gpx-color: #00ccff;   
+                --gpx-color: #00ccff;
                 --modal-bg: rgba(22, 22, 26, 0.95);
             }
         }
@@ -172,6 +171,13 @@
             margin-top: 10px;
         }
 
+        /* Zone Bluetooth */
+        .ble-panel {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+        }
+
         .btn {
             color: white;
             border: none;
@@ -181,11 +187,18 @@
             font-weight: 600;
             text-align: center;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            cursor: pointer;
+        }
+
+        .btn-full {
+            flex: 1;
+            padding: 12px;
         }
 
         .btn-gray { background-color: var(--card-bg); color: var(--text-color); border: 1px solid var(--text-muted); }
         .btn-blue { background-color: #007aff; }
         .btn-green { background-color: #34c759; }
+        .btn-magenta { background-color: #ff007f; }
 
         #gpx-file { display: none; }
 
@@ -199,7 +212,8 @@
         }
 
         #overlay button {
-            background: #007aff; color: white; border: none;
+            background: #007aff;
+            color: white; border: none;
             padding: 15px 30px; border-radius: 30px; font-size: 1.2rem; font-weight: bold; margin-top: 20px;
         }
 
@@ -216,7 +230,7 @@
             height: 0;
             border-left: 14px solid transparent;  
             border-right: 14px solid transparent; 
-            border-bottom: 38px solid var(--arrow-color); 
+            border-bottom: 38px solid var(--arrow-color);
             filter: drop-shadow(0px 4px 5px rgba(0,0,0,0.5)) drop-shadow(0px 0px 1px #fff); 
             transition: transform 0.1s linear, border-bottom-color 0.3s;
         }
@@ -237,7 +251,8 @@
         }
 
         .modal-shade.active {
-            opacity: 1; pointer-events: auto;
+            opacity: 1;
+            pointer-events: auto;
         }
 
         .modal-box {
@@ -319,8 +334,8 @@
                 <div><span id="distance" class="mini-value">0.0</span> <span style="font-size:0.8rem; color:var(--text-muted);">km</span></div>
             </div>
             <div class="mini-card">
-                <div class="mini-label">Autonomie</div>
-                <div><span id="range" class="mini-value">170</span> <span style="font-size:0.8rem; color:var(--text-muted);">km restants</span></div>
+                <div class="mini-label">Batterie / Autonomie</div>
+                <div><span id="range" class="mini-value">170</span> <span id="unit-label" style="font-size:0.8rem; color:var(--text-muted);">km restants</span></div>
             </div>
         </div>
     </div>
@@ -329,13 +344,16 @@
         <div id="map"></div>
     </div>
 
+    <div class="ble-panel">
+        <button id="ble-btn" class="btn btn-magenta btn-full" onclick="connectBluetoothMotos()">🔌 Connecter la Rezon Bohemia</button>
+    </div>
+
     <div class="controls">
         <button class="btn btn-gray" onclick="openModal()">Reset</button>
         <button class="btn btn-green" onclick="triggerGpxUpload()">Charger GPX</button>
         <button class="btn btn-blue" onclick="recenterMap()">Recentrer</button>
     </div>
 
-    <!-- FENÊTRE MODALE AVEC BOUTON DE THÈME DYNAMIQUE -->
     <div id="reset-modal" class="modal-shade" onclick="closeModal(event)">
         <div class="modal-box" onclick="event.stopPropagation()">
             <div class="modal-title">OPTIONS DE L'APPLICATION</div>
@@ -351,10 +369,9 @@
 
     <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const AUTONOMIE_MAX = 170; 
+        const AUTONOMIE_MAX = 170;
         let totalDistance = 0; 
         let currentRange = AUTONOMIE_MAX; 
         let lastPosition = null;
@@ -368,6 +385,13 @@
         let autoCenter = true;
         let autoCenterTimeout = null;
         let currentHeading = 0;
+
+        // Variables Bluetooth
+        let isConnectedBLE = false;
+        const REZON_SERVICE_UUID = '0000e0ff-3c17-d293-8e48-14fe2e4da212';
+        // Note : On écoute la première caractéristique commune du service. Si le décodage nécessite un sous-index spécifique, 
+        // nous l'isolerons dans la fonction callback de réception.
+        const REZON_CHAR_UUID    = '0000e101-3c17-d293-8e48-14fe2e4da212'; 
 
         // Chargement initial du thème
         if (localStorage.getItem('moto_theme')) {
@@ -385,7 +409,6 @@
 
         function initMap() {
             map = L.map('map', { zoomControl: false, inertia: false }).setView([46.2276, 2.2137], 13);
-            
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '© OpenStreetMap'
@@ -397,7 +420,6 @@
                 iconSize: [28, 38],
                 iconAnchor: [14, 24] 
             });
-
             marker = L.marker([0, 0], { icon: arrowIcon }).addTo(map);
 
             map.on('dragstart zoomstart', () => { 
@@ -460,22 +482,16 @@
                 }
             }
 
-            if (lastPosition) {
+            // Seulement si le Bluetooth n'est pas connecté, on dégrade l'autonomie à l'estimation mathématique
+            if (lastPosition && !isConnectedBLE) {
                 let dist = calculateDistance(lastPosition.coords.latitude, lastPosition.coords.longitude, lat, lon);
-                
                 if (speedKmh > 2 || dist > 0.005) { 
                     totalDistance += dist;
-                    
                     let penaltyFactor = 1.0;
-                    if (speedKmh < 40) {
-                        penaltyFactor = 0.80;  
-                    } else if (speedKmh >= 40 && speedKmh < 80) {
-                        penaltyFactor = 1.00;  
-                    } else if (speedKmh >= 80 && speedKmh < 95) {
-                        penaltyFactor = 1.25;  
-                    } else if (speedKmh >= 95) {
-                        penaltyFactor = 1.85;  
-                    }
+                    if (speedKmh < 40) { penaltyFactor = 0.80; } 
+                    else if (speedKmh >= 40 && speedKmh < 80) { penaltyFactor = 1.00; } 
+                    else if (speedKmh >= 80 && speedKmh < 95) { penaltyFactor = 1.25; } 
+                    else if (speedKmh >= 95) { penaltyFactor = 1.85; }
 
                     currentRange -= (dist * penaltyFactor);
                     if (currentRange < 0) currentRange = 0;
@@ -483,10 +499,71 @@
                     localStorage.setItem('moto_distance', totalDistance);
                     localStorage.setItem('moto_current_range', currentRange);
                 }
+            } else if (lastPosition && isConnectedBLE) {
+                // Si connecté en BLE, on incrémente quand même le totalisateur kilométrique GPS de la session
+                let dist = calculateDistance(lastPosition.coords.latitude, lastPosition.coords.longitude, lat, lon);
+                if (speedKmh > 2 || dist > 0.005) {
+                    totalDistance += dist;
+                    localStorage.setItem('moto_distance', totalDistance);
+                }
             }
             
             lastPosition = position;
             updateUI(speedKmh, totalDistance);
+        }
+
+        // FONCTION DE CONNEXION BLUETOOTH EN DIRECT
+        async function connectBluetoothMotos() {
+            const bleBtn = document.getElementById('ble-btn');
+            try {
+                bleBtn.innerText = "⚡ Recherche de la Bohemia...";
+                
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'REZON_' }],
+                    optionalServices: [REZON_SERVICE_UUID]
+                });
+
+                bleBtn.innerText = "⚡ Connexion au VCU Rezon...";
+                const server = await device.gatt.connect();
+                
+                bleBtn.innerText = "⚡ Lecture des flux...";
+                const service = await server.getPrimaryService(REZON_SERVICE_UUID);
+                
+                // Essai de liaison sur la caractéristique principale du flux
+                const characteristic = await service.getCharacteristic(REZON_CHAR_UUID);
+                await characteristic.startNotifications();
+                
+                isConnectedBLE = true;
+                bleBtn.style.backgroundColor = "#34c759";
+                bleBtn.innerText = "✅ Bohemia Connectée Live";
+
+                characteristic.addEventListener('characteristicvaluechanged', (event) => {
+                    const value = event.target.value;
+                    
+                    // Récupération de l'octet (dépend de la trame Rezon)
+                    // Si la trame transmet le % brut sur l'octet 0 :
+                    let batteryPercent = value.getUint8(0);
+                    
+                    // Si la valeur est aberrante (0 ou >100) et qu'ils utilisent un autre offset, 
+                    // on peut ajuster ici : ex value.getUint8(1)
+                    if (batteryPercent > 0 && batteryPercent <= 100) {
+                        currentRange = batteryPercent; // On stocke directement la valeur lue
+                        updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
+                    }
+                });
+
+                device.addEventListener('gattserverdisconnected', () => {
+                    isConnectedBLE = false;
+                    bleBtn.style.backgroundColor = "#ff007f";
+                    bleBtn.innerText = "🔌 Relancer connexion Bohemia";
+                });
+
+            } catch (error) {
+                console.error(error);
+                bleBtn.style.backgroundColor = "#ff007f";
+                bleBtn.innerText = "❌ Échec. Réessayer ?";
+                alert("Erreur de synchro Bluetooth : " + error.message);
+            }
         }
 
         function triggerGpxUpload() { document.getElementById('gpx-file').click(); }
@@ -510,13 +587,11 @@
                 const xmlDoc = parser.parseFromString(xmlText, "text/xml");
                 const trkpts = xmlDoc.getElementsByTagName("trkpt");
                 gpxPoints = [];
-
                 for (let i = 0; i < trkpts.length; i++) {
                     let lat = parseFloat(trkpts[i].getAttribute("lat"));
                     let lon = parseFloat(trkpts[i].getAttribute("lon"));
                     if (!isNaN(lat) && !isNaN(lon)) gpxPoints.push([lat, lon]);
                 }
-
                 drawGpxPolyline(fitBounds);
             } catch (err) {}
         }
@@ -526,9 +601,9 @@
                 if (gpxLayer) map.removeLayer(gpxLayer);
                 const strokeColor = getComputedStyle(document.documentElement).getPropertyValue('--gpx-color').trim();
                 gpxLayer = L.polyline(gpxPoints, {color: strokeColor, weight: 7, opacity: 0.85}).addTo(map);
-                
                 if (fitBounds) {
-                    autoCenter = false; rotateMap(0);
+                    autoCenter = false;
+                    rotateMap(0);
                     map.fitBounds(gpxLayer.getBounds());
                     clearTimeout(autoCenterTimeout);
                     autoCenterTimeout = setTimeout(() => { autoCenter = true; }, 8000);
@@ -552,7 +627,7 @@
             }
 
             if (closestIndex > 0 && minDistance < 0.150) {
-                gpxPoints.splice(0, closestIndex); 
+                gpxPoints.splice(0, closestIndex);
                 drawGpxPolyline(false);            
             }
         }
@@ -566,7 +641,7 @@
         }
 
         function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371; 
+            const R = 6371;
             let dLat = (lat2 - lat1) * Math.PI / 180; let dLon = (lon2 - lon1) * Math.PI / 180;
             let a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
             return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
@@ -576,14 +651,21 @@
             document.getElementById('speed').innerText = speed;
             document.getElementById('distance').innerText = distance.toFixed(1);
             
-            document.getElementById('range').innerText = Math.round(currentRange);
-            const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-color').trim();
-            document.getElementById('range').style.color = (currentRange < 30) ? '#ff3b30' : textColor;
-            
+            if (isConnectedBLE) {
+                // Affichage direct du pourcentage récolté par Bluetooth
+                document.getElementById('range').innerText = Math.round(currentRange);
+                document.getElementById('unit-label').innerText = "% live";
+                document.getElementById('range').style.color = (currentRange < 20) ? '#ff3b30' : 'var(--accent-color)';
+            } else {
+                // Affichage classique estimé en kilomètres
+                document.getElementById('range').innerText = Math.round(currentRange);
+                document.getElementById('unit-label').innerText = "km restants";
+                const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-color').trim();
+                document.getElementById('range').style.color = (currentRange < 30) ? '#ff3b30' : textColor;
+            }
             updateThemeButtonText();
         }
 
-        /* FONCTIONS DE LA MODALE MODIFIÉE */
         function openModal() {
             updateThemeButtonText();
             document.getElementById('reset-modal').classList.add('active');
@@ -593,11 +675,9 @@
             document.getElementById('reset-modal').classList.remove('active');
         }
 
-        // Détermine si l'affichage actuel à l'écran est sombre ou clair
         function isCurrentlyDark() {
             if (document.documentElement.classList.contains('force-dark')) return true;
             if (document.documentElement.classList.contains('force-light')) return false;
-            // Si aucun forçage, regarde le mode système de l'iPhone
             return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         }
 
@@ -613,8 +693,6 @@
 
         function menuToggleTheme() {
             closeModal();
-            
-            // Basculement direct d'un mode à l'autre
             if (isCurrentlyDark()) {
                 document.documentElement.className = "force-light";
                 localStorage.setItem('moto_theme', 'force-light');
@@ -622,8 +700,6 @@
                 document.documentElement.className = "force-dark";
                 localStorage.setItem('moto_theme', 'force-dark');
             }
-            
-            // Rafraîchir les couleurs du tracé GPX pour correspondre au nouveau thème
             if (localStorage.getItem('moto_gpx_data')) parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
             updateUI(0, totalDistance);
         }
