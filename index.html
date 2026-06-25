@@ -6,6 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Moto Dash & GPX</title>
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         /* MODE JOUR PAR DÉFAUT */
@@ -47,6 +48,19 @@
             --arrow-color: #00ff66;
             --gpx-color: #00ccff;
             --modal-bg: rgba(22, 22, 26, 0.95);
+        }
+
+        /* FORCE LE MODE JOUR MANUELLEMENT */
+        :root.force-light {
+            --bg-color: #f2f2f7;
+            --card-bg: #ffffff;
+            --accent-color: #007aff;
+            --text-color: #000000;
+            --text-muted: #8e8e93;
+            --map-invert: invert(0%) hue-rotate(0deg);
+            --arrow-color: #ff3b30; 
+            --gpx-color: #0055ff;   
+            --modal-bg: rgba(255, 255, 255, 0.95);
         }
 
         * {
@@ -207,7 +221,7 @@
             transition: transform 0.1s linear, border-bottom-color 0.3s;
         }
 
-        /* DESIGN DE LA POPUP DE RESET ET THEME */
+        /* POPUP DE RESET ET THEME */
         .modal-shade {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -217,7 +231,7 @@
             z-index: 200;
             display: flex;
             justify-content: center;
-            align-items: flex-end; /* S'ouvre depuis le bas style iOS */
+            align-items: flex-end;
             opacity: 0; pointer-events: none;
             transition: opacity 0.25s ease;
         }
@@ -321,6 +335,7 @@
         <button class="btn btn-blue" onclick="recenterMap()">Recentrer</button>
     </div>
 
+    <!-- FENÊTRE MODALE AVEC BOUTON DE THÈME DYNAMIQUE -->
     <div id="reset-modal" class="modal-shade" onclick="closeModal(event)">
         <div class="modal-box" onclick="event.stopPropagation()">
             <div class="modal-title">OPTIONS DE L'APPLICATION</div>
@@ -328,7 +343,7 @@
                 <button class="modal-btn" onclick="menuResetFull()">Remettre à zéro (Faire le Plein)</button>
                 <button class="modal-btn" onclick="menuSetBattery()">Saisir le % de batterie</button>
                 <button class="modal-btn modal-btn-danger" onclick="menuDeleteGpx()">Supprimer le tracé GPX</button>
-                <button class="modal-btn" onclick="menuToggleTheme()">Changer le mode d'affichage</button>
+                <button id="theme-toggle-btn" class="modal-btn" onclick="menuToggleTheme()">Passer en Mode Nuit</button>
                 <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Fermer</button>
             </div>
         </div>
@@ -336,6 +351,7 @@
 
     <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const AUTONOMIE_MAX = 170; 
@@ -353,6 +369,7 @@
         let autoCenterTimeout = null;
         let currentHeading = 0;
 
+        // Chargement initial du thème
         if (localStorage.getItem('moto_theme')) {
             document.documentElement.className = localStorage.getItem('moto_theme');
         }
@@ -562,15 +579,53 @@
             document.getElementById('range').innerText = Math.round(currentRange);
             const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-color').trim();
             document.getElementById('range').style.color = (currentRange < 30) ? '#ff3b30' : textColor;
+            
+            updateThemeButtonText();
         }
 
-        /* FONCTIONS DE GESTION DE LA MODALE */
+        /* FONCTIONS DE LA MODALE MODIFIÉE */
         function openModal() {
+            updateThemeButtonText();
             document.getElementById('reset-modal').classList.add('active');
         }
 
         function closeModal() {
             document.getElementById('reset-modal').classList.remove('active');
+        }
+
+        // Détermine si l'affichage actuel à l'écran est sombre ou clair
+        function isCurrentlyDark() {
+            if (document.documentElement.classList.contains('force-dark')) return true;
+            if (document.documentElement.classList.contains('force-light')) return false;
+            // Si aucun forçage, regarde le mode système de l'iPhone
+            return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        }
+
+        function updateThemeButtonText() {
+            const btn = document.getElementById('theme-toggle-btn');
+            if (!btn) return;
+            if (isCurrentlyDark()) {
+                btn.innerText = "Passer en Mode Jour";
+            } else {
+                btn.innerText = "Passer en Mode Nuit";
+            }
+        }
+
+        function menuToggleTheme() {
+            closeModal();
+            
+            // Basculement direct d'un mode à l'autre
+            if (isCurrentlyDark()) {
+                document.documentElement.className = "force-light";
+                localStorage.setItem('moto_theme', 'force-light');
+            } else {
+                document.documentElement.className = "force-dark";
+                localStorage.setItem('moto_theme', 'force-dark');
+            }
+            
+            // Rafraîchir les couleurs du tracé GPX pour correspondre au nouveau thème
+            if (localStorage.getItem('moto_gpx_data')) parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
+            updateUI(0, totalDistance);
         }
 
         function menuResetFull() {
@@ -588,7 +643,7 @@
                         currentRange = (percentage / 100) * AUTONOMIE_MAX; totalDistance = 0; saveAndRefresh();
                     }
                 }
-            }, 300); // Laisse la modale se fermer avant le prompt natif d'iOS
+            }, 300);
         }
 
         function menuDeleteGpx() {
@@ -596,22 +651,6 @@
             gpxPoints = [];
             if (gpxLayer) map.removeLayer(gpxLayer);
             localStorage.removeItem('moto_gpx_data');
-        }
-
-        function menuToggleTheme() {
-            closeModal();
-            setTimeout(() => {
-                let themeChoice = prompt("Choisir l'affichage :\n\n1 = Automatique (iPhone)\n2 = Jour forcé\n3 = Nuit forcé", "1");
-                if (themeChoice === "1") {
-                    document.documentElement.className = ""; localStorage.removeItem('moto_theme');
-                } else if (themeChoice === "2") {
-                    document.documentElement.className = "force-light"; localStorage.setItem('moto_theme', 'force-light');
-                } else if (themeChoice === "3") {
-                    document.documentElement.className = "force-dark"; localStorage.setItem('moto_theme', 'force-dark');
-                }
-                if (localStorage.getItem('moto_gpx_data')) parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
-                updateUI(0, totalDistance);
-            }, 300);
         }
 
         function saveAndRefresh() {
