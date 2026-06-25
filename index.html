@@ -18,6 +18,7 @@
             --map-invert: invert(0%) hue-rotate(0deg);
             --arrow-color: #ff3b30; 
             --gpx-color: #0055ff;   
+            --modal-bg: rgba(255, 255, 255, 0.95);
         }
 
         /* AUTO-BASCULEMENT EN MODE SOMBRE VIA LES RÉGLAGES IPHONE */
@@ -31,6 +32,7 @@
                 --map-invert: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
                 --arrow-color: #00ff66; 
                 --gpx-color: #00ccff;   
+                --modal-bg: rgba(22, 22, 26, 0.95);
             }
         }
 
@@ -44,6 +46,7 @@
             --map-invert: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
             --arrow-color: #00ff66;
             --gpx-color: #00ccff;
+            --modal-bg: rgba(22, 22, 26, 0.95);
         }
 
         * {
@@ -147,7 +150,7 @@
             filter: var(--map-invert);
         }
 
-        /* Boutons */
+        /* Boutons principaux */
         .controls {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
@@ -203,6 +206,84 @@
             filter: drop-shadow(0px 4px 5px rgba(0,0,0,0.5)) drop-shadow(0px 0px 1px #fff); 
             transition: transform 0.1s linear, border-bottom-color 0.3s;
         }
+
+        /* DESIGN DE LA POPUP DE RESET ET THEME */
+        .modal-shade {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 200;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end; /* S'ouvre depuis le bas style iOS */
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+        .modal-shade.active {
+            opacity: 1; pointer-events: auto;
+        }
+
+        .modal-box {
+            background: var(--modal-bg);
+            width: 100%;
+            max-width: 500px;
+            border-top-left-radius: 20px;
+            border-top-right-radius: 20px;
+            padding: 20px calc(env(safe-area-inset-left) + 20px) calc(env(safe-area-inset-bottom) + 20px) calc(env(safe-area-inset-right) + 20px);
+            box-shadow: 0 -5px 25px rgba(0,0,0,0.15);
+            transform: translateY(100%);
+            transition: transform 0.25s cubic-bezier(0.15, 1, 0.3, 1);
+        }
+
+        .modal-shade.active .modal-box {
+            transform: translateY(0);
+        }
+
+        .modal-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 20px;
+            color: var(--text-color);
+            letter-spacing: 0.5px;
+        }
+
+        .modal-menu-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .modal-btn {
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            border: 1px solid rgba(142, 142, 147, 0.2);
+            border-radius: 12px;
+            padding: 16px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-align: center;
+            transition: background-color 0.1s;
+        }
+
+        .modal-btn:active {
+            background-color: rgba(142, 142, 147, 0.2);
+        }
+
+        .modal-btn-danger {
+            color: #ff3b30;
+        }
+
+        .modal-btn-cancel {
+            margin-top: 10px;
+            background-color: transparent;
+            border: none;
+            color: var(--accent-color);
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
@@ -235,16 +316,29 @@
     </div>
 
     <div class="controls">
-        <button class="btn btn-gray" onclick="showResetMenu()">Reset</button>
+        <button class="btn btn-gray" onclick="openModal()">Reset</button>
         <button class="btn btn-green" onclick="triggerGpxUpload()">Charger GPX</button>
         <button class="btn btn-blue" onclick="recenterMap()">Recentrer</button>
+    </div>
+
+    <div id="reset-modal" class="modal-shade" onclick="closeModal(event)">
+        <div class="modal-box" onclick="event.stopPropagation()">
+            <div class="modal-title">OPTIONS DE L'APPLICATION</div>
+            <div class="modal-menu-stack">
+                <button class="modal-btn" onclick="menuResetFull()">Remettre à zéro (Faire le Plein)</button>
+                <button class="modal-btn" onclick="menuSetBattery()">Saisir le % de batterie</button>
+                <button class="modal-btn modal-btn-danger" onclick="menuDeleteGpx()">Supprimer le tracé GPX</button>
+                <button class="modal-btn" onclick="menuToggleTheme()">Changer le mode d'affichage</button>
+                <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Fermer</button>
+            </div>
+        </div>
     </div>
 
     <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const AUTONOMIE_MAX = 170; // Calibré sur ton test réel (145km à 84% consommés)
+        const AUTONOMIE_MAX = 170; 
         let totalDistance = 0; 
         let currentRange = AUTONOMIE_MAX; 
         let lastPosition = null;
@@ -355,19 +449,17 @@
                 if (speedKmh > 2 || dist > 0.005) { 
                     totalDistance += dist;
                     
-                    // CALCUL DE LA CONSOMMATION DYNAMIQUE CALIBRÉ POUR LA REZON BOHEMIA
                     let penaltyFactor = 1.0;
                     if (speedKmh < 40) {
-                        penaltyFactor = 0.80;  // Ville / Mode Éco tranquille
+                        penaltyFactor = 0.80;  
                     } else if (speedKmh >= 40 && speedKmh < 80) {
-                        penaltyFactor = 1.00;  // Départementale / Mode Confort (Nominal)
+                        penaltyFactor = 1.00;  
                     } else if (speedKmh >= 80 && speedKmh < 95) {
-                        penaltyFactor = 1.25;  // Voie rapide intermédiaire
+                        penaltyFactor = 1.25;  
                     } else if (speedKmh >= 95) {
-                        penaltyFactor = 1.85;  // Voie rapide 110 km/h / Mode Sport (Résistance air max)
+                        penaltyFactor = 1.85;  
                     }
 
-                    // Déduction pondérée de l'autonomie restante
                     currentRange -= (dist * penaltyFactor);
                     if (currentRange < 0) currentRange = 0;
 
@@ -472,32 +564,44 @@
             document.getElementById('range').style.color = (currentRange < 30) ? '#ff3b30' : textColor;
         }
 
-        function showResetMenu() {
-            let choix = prompt(
-                "Options :\n\n" +
-                "1 : Remettre à zéro (Plein)\n" +
-                "2 : Saisir le % de batterie\n" +
-                "3 : Supprimer le tracé GPX\n" +
-                "4 : Mode d'affichage (Auto / Jour / Nuit)\n\n" +
-                "Entrez un chiffre :", "1"
-            );
+        /* FONCTIONS DE GESTION DE LA MODALE */
+        function openModal() {
+            document.getElementById('reset-modal').classList.add('active');
+        }
 
-            if (choix === "1") {
-                currentRange = AUTONOMIE_MAX; totalDistance = 0; saveAndRefresh();
-            } else if (choix === "2") {
-                let inputPercent = prompt("Pourcentage (0-100) :", "100");
+        function closeModal() {
+            document.getElementById('reset-modal').classList.remove('active');
+        }
+
+        function menuResetFull() {
+            closeModal();
+            currentRange = AUTONOMIE_MAX; totalDistance = 0; saveAndRefresh();
+        }
+
+        function menuSetBattery() {
+            closeModal();
+            setTimeout(() => {
+                let inputPercent = prompt("Saisir le pourcentage de batterie (0-100) :", "100");
                 if (inputPercent !== null) {
                     let percentage = parseInt(inputPercent, 10);
                     if (!isNaN(percentage) && percentage >= 0 && percentage <= 100) {
                         currentRange = (percentage / 100) * AUTONOMIE_MAX; totalDistance = 0; saveAndRefresh();
                     }
                 }
-            } else if (choix === "3") {
-                gpxPoints = [];
-                if (gpxLayer) map.removeLayer(gpxLayer);
-                localStorage.removeItem('moto_gpx_data');
-            } else if (choix === "4") {
-                let themeChoice = prompt("Thème :\n1 = Automatique (iOS)\n2 = Jour forcé\n3 = Nuit forcé", "1");
+            }, 300); // Laisse la modale se fermer avant le prompt natif d'iOS
+        }
+
+        function menuDeleteGpx() {
+            closeModal();
+            gpxPoints = [];
+            if (gpxLayer) map.removeLayer(gpxLayer);
+            localStorage.removeItem('moto_gpx_data');
+        }
+
+        function menuToggleTheme() {
+            closeModal();
+            setTimeout(() => {
+                let themeChoice = prompt("Choisir l'affichage :\n\n1 = Automatique (iPhone)\n2 = Jour forcé\n3 = Nuit forcé", "1");
                 if (themeChoice === "1") {
                     document.documentElement.className = ""; localStorage.removeItem('moto_theme');
                 } else if (themeChoice === "2") {
@@ -507,7 +611,7 @@
                 }
                 if (localStorage.getItem('moto_gpx_data')) parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
                 updateUI(0, totalDistance);
-            }
+            }, 300);
         }
 
         function saveAndRefresh() {
