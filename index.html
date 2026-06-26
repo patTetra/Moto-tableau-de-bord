@@ -6,7 +6,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Moto Dash & GPX</title>
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         /* MODE JOUR PAR DÉFAUT */
@@ -450,7 +449,6 @@
     </div>
 
     <div id="map-container">
-        <!-- BARRE DE RECHERCHE INTEGRÉE SUR LA CARTE -->
         <div class="search-overlay-bar">
             <div id="search-wrapper" class="search-input-wrapper">
                 <input type="text" id="search-input" placeholder="Où va-t-on ? (Ex: Morlaix, Brest...)" oninput="handleSearchTyping()">
@@ -473,7 +471,6 @@
         <button class="btn btn-blue" onclick="recenterMap()">🎯 Recentrer</button>
     </div>
 
-    <!-- FENÊTRE MODALE -->
     <div id="reset-modal" class="modal-shade" onclick="closeModal(event)">
         <div class="modal-box" onclick="event.stopPropagation()">
             <div class="modal-title">OPTIONS DE L'APPLICATION</div>
@@ -489,7 +486,6 @@
 
     <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         // Clé API OpenRouteService intégrée automatiquement
@@ -505,6 +501,7 @@
         let marker = null;
         let gpxLayer = null; 
         let gpxPoints = []; 
+        let tempDestinationMarker = null; // Marqueur temporaire pour l'appui long
         
         let autoCenter = true;
         let autoCenterTimeout = null;
@@ -516,6 +513,7 @@
         let remainingDurationSeconds = 0; 
         let lastRouteCalculationTime = 0;  
         let autocompleteTimeout = null;
+        let pressTimer = null; // Timer pour détecter l'appui long
 
         let isConnectedBLE = false;
         const REZON_SERVICE_UUID = '0000e0ff-3c17-d293-8e48-14fe2e4da212';
@@ -552,6 +550,7 @@
             });
             marker = L.marker([0, 0], { icon: arrowIcon }).addTo(map);
 
+            // Événements pour la carte : glissement / zoom
             map.on('dragstart zoomstart', () => { 
                 autoCenter = false; 
                 clearTimeout(autoCenterTimeout);
@@ -559,9 +558,58 @@
                 autoCenterTimeout = setTimeout(() => { autoCenter = true; }, 6000);
             });
 
+            // Émulation de l'appui long (1 seconde) sur la carte
+            map.on('mousedown touchstart', (e) => {
+                clearTimeout(pressTimer);
+                pressTimer = setTimeout(() => {
+                    handleLongPress(e.latlng);
+                }, 1000);
+            });
+
+            map.on('mouseup mousemove touchend touchmove contextmenu', () => {
+                clearTimeout(pressTimer);
+            });
+
             if (localStorage.getItem('moto_gpx_data')) {
                 parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
             }
+        }
+
+        // Gestion de la logique de l'appui long
+        function handleLongPress(latlng) {
+            if (targetDestinationName) {
+                if (!confirm(`Arrêter le guidage vers ${targetDestinationName} pour choisir un nouveau point ?`)) {
+                    return;
+                }
+                menuDeleteGpx();
+            }
+
+            // Ajoute un repère visuel standard temporaire là où l'utilisateur appuie
+            if (tempDestinationMarker) map.removeLayer(tempDestinationMarker);
+            tempDestinationMarker = L.marker(latlng).addTo(map);
+
+            // Timeout pour laisser le temps au thread de l'interface de s'ajuster
+            setTimeout(() => {
+                if (confirm("Définir ce point sur la carte comme destination ?")) {
+                    targetDestinationName = "Point sur la carte";
+                    targetCoords = { lat: latlng.lat, lon: latlng.lng };
+
+                    localStorage.setItem('moto_target_name', targetDestinationName);
+                    localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
+
+                    executeSilentRecalculate(lastPosition ? lastPosition.coords.latitude : latlng.lat, lastPosition ? lastPosition.coords.longitude : latlng.lng, true);
+                    
+                    if (tempDestinationMarker) {
+                        map.removeLayer(tempDestinationMarker);
+                        tempDestinationMarker = null;
+                    }
+                } else {
+                    if (tempDestinationMarker) {
+                        map.removeLayer(tempDestinationMarker);
+                        tempDestinationMarker = null;
+                    }
+                }
+            }, 50);
         }
 
         function startApp() {
@@ -710,7 +758,6 @@
                 return;
             }
 
-            // Attente de 350ms après la frappe pour éviter de saturer l'API (Debounce)
             autocompleteTimeout = setTimeout(async () => {
                 try {
                     let biasString = "";
@@ -726,7 +773,6 @@
                     if (data.length > 0) {
                         resultsBox.classList.add('active');
                         data.forEach(item => {
-                            // On extrait un libellé plus court et lisible (Nom + Ville ou Département)
                             let parts = item.display_name.split(',');
                             let shortName = parts[0];
                             if (parts[1]) shortName += `, ${parts[1].trim()}`;
