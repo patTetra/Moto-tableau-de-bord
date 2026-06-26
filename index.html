@@ -815,13 +815,17 @@
     routeBtn.innerText = "🔄 Calcul...";
 
     try {
-        // Changement du profil pour 'cycling-road' pour éviter les grands axes
-        let routeUrl = `https://api.openrouteservice.org/v2/directions/cycling-road/geojson`;
+        // Utilisation du profil 'driving-car' pour une estimation réaliste du temps de trajet
+        let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
         
         let bodyQuery = {
             coordinates: [[startLon, startLat], [targetCoords.lon, targetCoords.lat]],
             preference: "fastest",
-            units: "km"
+            units: "km",
+            options: {
+                // Instruction pour éviter les autoroutes et les routes à péage
+                avoid_features: ["highways", "tollways"] 
+            }
         };
 
         let routeResponse = await fetch(routeUrl, {
@@ -842,13 +846,13 @@
             
             gpxPoints = coordinates.map(coord => [coord[1], coord[0]]);
             
+            // L'API utilise maintenant les vitesses de véhicule pour le calcul du temps
             remainingDurationSeconds = feature.properties.summary.duration;
             lastRouteCalculationTime = Date.now();
 
             localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
             drawGpxPolyline(fitBounds);
             
-            // Succès : retour au texte normal
             routeBtn.innerText = `🛑 Stop : ${targetDestinationName}`;
         } else {
             throw new Error("Aucun itinéraire trouvé");
@@ -856,7 +860,7 @@
 
     } catch (e) {
         console.error("Échec OpenRouteService", e);
-        alert("Erreur : Impossible de trouver un itinéraire (la distance est peut-être trop grande pour le mode balade).");
+        alert("Erreur : Impossible de trouver un itinéraire sans autoroute. Essayez une destination plus proche ou modifiez votre itinéraire.");
         routeBtn.innerText = "❌ Erreur";
         setTimeout(() => { routeBtn.innerText = originalText; }, 3000);
     } finally {
