@@ -817,17 +817,12 @@
                 let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
                 
                 let bodyQuery = {
-                    coordinates: [[startLon, startLat], [targetCoords.lon, targetCoords.lat]],
-                    preference: "recommended",
+                    coordinates: [
+                        [parseFloat(startLon), parseFloat(startLat)], 
+                        [parseFloat(targetCoords.lon), parseFloat(targetCoords.lat)]
+                    ],
                     options: {
-                        // "highways" évite les autoroutes et les grosses bretelles rapides à double sens
-                        avoid_features: ["highways", "tollways"],
-                        profile_params: {
-                            weightings: {
-                                // Augmenter le steer_factor pousse le routage à quitter les grands axes routiers (comme la N12) au profit des départementales
-                                steer_factor: 1.5
-                            }
-                        }
+                        avoid_features: ["highways", "tollways"]
                     }
                 };
 
@@ -841,6 +836,10 @@
                     body: JSON.stringify(bodyQuery)
                 });
                 
+                if (!routeResponse.ok) {
+                    throw new Error(`Erreur API: ${routeResponse.status}`);
+                }
+
                 let routeData = await routeResponse.json();
 
                 if (routeData.features && routeData.features.length > 0) {
@@ -854,12 +853,15 @@
 
                     localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
                     drawGpxPolyline(fitBounds);
+                } else {
+                    console.warn("Aucun itinéraire trouvé dans la réponse");
                 }
             } catch (e) {
-                console.error("Échec OpenRouteService", e);
+                console.error("Échec critique OpenRouteService :", e);
             } finally {
                 isCalculatingRoute = false;
-                updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
+                let currentSpeed = parseInt(document.getElementById('speed').innerText) || 0;
+                updateUI(currentSpeed, totalDistance);
             }
         }
 
