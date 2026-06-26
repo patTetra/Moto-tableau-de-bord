@@ -82,12 +82,12 @@
             transition: background-color 0.3s ease, color 0.3s ease;
         }
 
-        /* Top Dash */
+        /* Top Dash réagencé en 3 colonnes pour accueillir l'ETA proprement */
         .top-dash {
             display: grid;
-            grid-template-columns: 1.2fr 1fr;
+            grid-template-columns: 1fr 0.9fr 0.9fr;
             gap: 10px;
-            height: 140px;
+            height: 130px;
             margin-bottom: 10px;
         }
 
@@ -102,7 +102,7 @@
         }
 
         .speed-value {
-            font-size: 4rem;
+            font-size: 3.5rem;
             font-weight: 800;
             line-height: 1;
             color: var(--accent-color);
@@ -110,7 +110,7 @@
         }
 
         .speed-unit {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: var(--text-muted);
             letter-spacing: 1px;
         }
@@ -127,18 +127,21 @@
             display: flex;
             flex-direction: column;
             justify-content: center;
-            padding-left: 15px;
+            padding-left: 12px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.05);
         }
 
         .mini-label {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: var(--text-muted);
             text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .mini-value {
-            font-size: 1.4rem;
+            font-size: 1.25rem;
             font-weight: 600;
         }
 
@@ -332,11 +335,21 @@
         <div class="stats-stack">
             <div class="mini-card">
                 <div class="mini-label">Parcouru</div>
-                <div><span id="distance" class="mini-value">0.0</span> <span style="font-size:0.8rem; color:var(--text-muted);">km</span></div>
+                <div><span id="distance" class="mini-value">0.0</span> <span style="font-size:0.75rem; color:var(--text-muted);">km</span></div>
             </div>
             <div class="mini-card">
-                <div class="mini-label">Batterie / Autonomie</div>
-                <div><span id="range" class="mini-value">170</span> <span id="unit-label" style="font-size:0.8rem; color:var(--text-muted);">km restants</span></div>
+                <div class="mini-label">Autonomie</div>
+                <div><span id="range" class="mini-value">170</span> <span id="unit-label" style="font-size:0.75rem; color:var(--text-muted);">km</span></div>
+            </div>
+        </div>
+        <div class="stats-stack">
+            <div class="mini-card">
+                <div class="mini-label">Arrivée (ETA)</div>
+                <div><span id="eta-time" class="mini-value">--:--</span></div>
+            </div>
+            <div class="mini-card">
+                <div class="mini-label">Restant</div>
+                <div><span id="eta-duration" class="mini-value">--</span></div>
             </div>
         </div>
     </div>
@@ -388,10 +401,12 @@
         let autoCenterTimeout = null;
         let currentHeading = 0;
 
-        // Variables pour le recalcul automatique
+        // Variables de navigation et d'ETA
         let targetDestinationName = null;
         let targetCoords = null; 
         let isCalculatingRoute = false;
+        let remainingDurationSeconds = 0; // Stocke la durée restante renvoyée par le serveur OSRM
+        let lastRouteCalculationTime = 0;  // Pour estimer la baisse du temps entre deux updates GPS
 
         let isConnectedBLE = false;
         const REZON_SERVICE_UUID = '0000e0ff-3c17-d293-8e48-14fe2e4da212';
@@ -408,7 +423,6 @@
             currentRange = parseFloat(localStorage.getItem('moto_current_range'));
         }
 
-        // Restaurer la cible de navigation si présente
         if (localStorage.getItem('moto_target_name') && localStorage.getItem('moto_target_coords')) {
             targetDestinationName = localStorage.getItem('moto_target_name');
             targetCoords = JSON.parse(localStorage.getItem('moto_target_coords'));
@@ -487,7 +501,6 @@
                     rotateMap(currentHeading);
                 }
                 
-                // Vérification de déviation pour le recalcul automatique
                 if (gpxPoints.length > 0) {
                     checkRouteDeviationAndClean(lat, lon);
                 }
@@ -521,12 +534,10 @@
             updateUI(speedKmh, totalDistance);
         }
 
-        // STRATÉGIE DE RECALCUL AUTOMATIQUE INTELLIGENT
         function checkRouteDeviationAndClean(currentLat, currentLon) {
             let closestIndex = -1;
             let minDistance = Infinity;
 
-            // Trouver le point le plus proche sur notre ligne bleue
             for (let i = 0; i < gpxPoints.length; i++) {
                 let dist = calculateDistance(currentLat, currentLon, gpxPoints[i][0], gpxPoints[i][1]);
                 if (dist < minDistance) {
@@ -535,29 +546,34 @@
                 }
             }
 
-            // Déclencheur de recalcul : Éloignement > 150m (0.150 km)
+            // Déviation > 150m : Recalcul automatique complet
             if (targetCoords && minDistance > 0.150 && !isCalculatingRoute) {
-                console.log("Déviation détectée ! Recalcul automatique en cours...");
                 executeSilentRecalculate(currentLat, currentLon);
                 return;
             }
 
-            // Sinon nettoyage classique des points dépassés (si à moins de 150m)
+            // Progression normale : nettoyage des points derrière nous
             if (closestIndex > 0 && minDistance < 0.150) {
                 gpxPoints.splice(0, closestIndex);
                 localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
                 drawGpxPolyline(false);            
+                
+                // Soustraire le temps écoulé réel depuis le dernier calcul serveur pour lisser l'ETA en continu
+                if (lastRouteCalculationTime > 0 && remainingDurationSeconds > 0) {
+                    let elapsed = Math.round((Date.now() - lastRouteCalculationTime) / 1000);
+                    let localEstimate = remainingDurationSeconds - elapsed;
+                    remainingDurationSeconds = localEstimate > 0 ? localEstimate : 0;
+                    lastRouteCalculationTime = Date.now();
+                }
             }
         }
 
-        // Lancement initial d'un trajet demandé par l'utilisateur
         async function searchDestinationRoute() {
             if (!lastPosition) {
                 alert("Signal GPS manquant pour démarrer.");
                 return;
             }
 
-            // Si un guidage est déjà actif, cliquer sur le bouton permet de l'annuler proprement
             if (targetDestinationName) {
                 if (confirm(`Arrêter le guidage vers ${targetDestinationName} ?`)) {
                     menuDeleteGpx();
@@ -591,12 +607,12 @@
             }
         }
 
-        // Moteur de calcul transparent (utilisé pour l'initial et le recalcul auto)
         async function executeSilentRecalculate(startLat, startLon, fitBounds = false) {
             if (!targetCoords || isCalculatingRoute) return;
             isCalculatingRoute = true;
             
             const routeBtn = document.getElementById('route-btn');
+            const originalText = routeBtn.innerText;
             routeBtn.innerText = "🔄 Recalcul...";
 
             try {
@@ -607,6 +623,11 @@
                 if (routeData.routes && routeData.routes.length > 0) {
                     let coordinates = routeData.routes[0].geometry.coordinates;
                     gpxPoints = coordinates.map(coord => [coord[1], coord[0]]);
+                    
+                    // Récupération de la durée totale estimée (fournie en secondes par l'API)
+                    remainingDurationSeconds = routeData.routes[0].duration;
+                    lastRouteCalculationTime = Date.now();
+
                     localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
                     drawGpxPolyline(fitBounds);
                 }
@@ -670,9 +691,10 @@
             const reader = new FileReader();
             reader.onload = function(e) {
                 const gpxText = e.target.result;
-                // Si import d'un GPX brut, on désactive le ciblage de routage automatique
+                // Si import d'un GPX brut manuel, pas de cible de recalcul / d'ETA dynamique
                 targetDestinationName = null;
                 targetCoords = null;
+                remainingDurationSeconds = 0;
                 localStorage.removeItem('moto_target_name');
                 localStorage.removeItem('moto_target_coords');
                 
@@ -738,7 +760,7 @@
             document.getElementById('speed').innerText = speed;
             document.getElementById('distance').innerText = distance.toFixed(1);
             
-            // Adapter le libellé du bouton de trajet
+            // Gestion du bouton de routage
             const routeBtn = document.getElementById('route-btn');
             if (targetDestinationName) {
                 routeBtn.innerText = `🛑 Stop : ${targetDestinationName}`;
@@ -748,6 +770,30 @@
                 routeBtn.style.backgroundColor = "#ff9500";
             }
 
+            // CALCUL DE L'ETA (Heure d'arrivée)
+            if (targetDestinationName && remainingDurationSeconds > 0) {
+                let totalMinutesRestantes = Math.round(remainingDurationSeconds / 60);
+                
+                // Formater la durée (Ex: "45 min" ou "1h15")
+                if (totalMinutesRestantes < 60) {
+                    document.getElementById('eta-duration').innerText = `${totalMinutesRestantes} min`;
+                } else {
+                    let h = Math.floor(totalMinutesRestantes / 60);
+                    let m = totalMinutesRestantes % 60;
+                    document.getElementById('eta-duration').innerText = `${h}h${m < 10 ? '0' : ''}${m}`;
+                }
+
+                // Calculer l'heure exacte d'arrivée
+                let dateArrivee = new Date(Date.now() + remainingDurationSeconds * 1000);
+                let hours = dateArrivee.getHours();
+                let minutes = dateArrivee.getMinutes();
+                document.getElementById('eta-time').innerText = `${hours}:${minutes < 10 ? '0' : ''}${minutes}`;
+            } else {
+                document.getElementById('eta-time').innerText = "--:--";
+                document.getElementById('eta-duration').innerText = "--";
+            }
+
+            // Gestion des couleurs d'autonomie
             if (isConnectedBLE) {
                 document.getElementById('range').innerText = Math.round(currentRange);
                 document.getElementById('unit-label').innerText = "% live";
@@ -819,6 +865,7 @@
             if (gpxLayer) map.removeLayer(gpxLayer);
             targetDestinationName = null;
             targetCoords = null;
+            remainingDurationSeconds = 0;
             localStorage.removeItem('moto_gpx_data');
             localStorage.removeItem('moto_target_name');
             localStorage.removeItem('moto_target_coords');
