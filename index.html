@@ -82,7 +82,6 @@
             transition: background-color 0.3s ease, color 0.3s ease;
         }
 
-        /* Top Dash réagencé en 3 colonnes pour accueillir l'ETA proprement */
         .top-dash {
             display: grid;
             grid-template-columns: 1fr 0.9fr 0.9fr;
@@ -145,7 +144,6 @@
             font-weight: 600;
         }
 
-        /* Conteneur Carte */
         #map-container {
             flex: 1;
             position: relative;
@@ -166,7 +164,6 @@
             filter: var(--map-invert);
         }
 
-        /* Controls Grid */
         .controls {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -174,7 +171,6 @@
             margin-top: 10px;
         }
 
-        /* Zone Bluetooth */
         .ble-panel {
             margin-top: 10px;
             display: flex;
@@ -239,7 +235,6 @@
             transition: transform 0.1s linear, border-bottom-color 0.3s;
         }
 
-        /* MODAL OPTIONS */
         .modal-shade {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -386,6 +381,9 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
+        // ⚠️ METTEZ VOTRE CLÉ OPENROUTESERVICE CI-DESSOUS POUR QUE LE FILTRAGE FONCTIONNE
+        const ORS_API_KEY = "VOTRE_CLE_API_OPENROUTESERVICE_ICI";
+
         const AUTONOMIE_MAX = 170;
         let totalDistance = 0; 
         let currentRange = AUTONOMIE_MAX; 
@@ -401,12 +399,11 @@
         let autoCenterTimeout = null;
         let currentHeading = 0;
 
-        // Variables de navigation et d'ETA
         let targetDestinationName = null;
         let targetCoords = null; 
         let isCalculatingRoute = false;
-        let remainingDurationSeconds = 0; // Stocke la durée restante renvoyée par le serveur OSRM
-        let lastRouteCalculationTime = 0;  // Pour estimer la baisse du temps entre deux updates GPS
+        let remainingDurationSeconds = 0; 
+        let lastRouteCalculationTime = 0;  
 
         let isConnectedBLE = false;
         const REZON_SERVICE_UUID = '0000e0ff-3c17-d293-8e48-14fe2e4da212';
@@ -415,14 +412,12 @@
         if (localStorage.getItem('moto_theme')) {
             document.documentElement.className = localStorage.getItem('moto_theme');
         }
-
         if (localStorage.getItem('moto_distance')) {
             totalDistance = parseFloat(localStorage.getItem('moto_distance'));
         }
         if (localStorage.getItem('moto_current_range')) {
             currentRange = parseFloat(localStorage.getItem('moto_current_range'));
         }
-
         if (localStorage.getItem('moto_target_name') && localStorage.getItem('moto_target_coords')) {
             targetDestinationName = localStorage.getItem('moto_target_name');
             targetCoords = JSON.parse(localStorage.getItem('moto_target_coords'));
@@ -471,7 +466,6 @@
         function rotateMap(heading) {
             const mapEl = document.getElementById('map');
             const arrowEl = document.getElementById('moto-arrow');
-            
             if (autoCenter && heading !== null && heading !== undefined) {
                 mapEl.style.transform = `rotate(${-heading}deg)`;
                 if (arrowEl) arrowEl.style.transform = `rotate(${heading}deg)`;
@@ -489,7 +483,6 @@
             if (position.coords.speed !== null && position.coords.speed > 0) {
                 speedKmh = Math.round(position.coords.speed * 3.6);
             }
-
             if (position.coords.heading !== null && !isNaN(position.coords.heading) && speedKmh > 5) {
                 currentHeading = position.coords.heading;
             }
@@ -500,7 +493,6 @@
                     map.setView([lat, lon], 16);
                     rotateMap(currentHeading);
                 }
-                
                 if (gpxPoints.length > 0) {
                     checkRouteDeviationAndClean(lat, lon);
                 }
@@ -529,7 +521,6 @@
                     localStorage.setItem('moto_distance', totalDistance);
                 }
             }
-            
             lastPosition = position;
             updateUI(speedKmh, totalDistance);
         }
@@ -546,19 +537,16 @@
                 }
             }
 
-            // Déviation > 150m : Recalcul automatique complet
             if (targetCoords && minDistance > 0.150 && !isCalculatingRoute) {
                 executeSilentRecalculate(currentLat, currentLon);
                 return;
             }
 
-            // Progression normale : nettoyage des points derrière nous
             if (closestIndex > 0 && minDistance < 0.150) {
                 gpxPoints.splice(0, closestIndex);
                 localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
                 drawGpxPolyline(false);            
                 
-                // Soustraire le temps écoulé réel depuis le dernier calcul serveur pour lisser l'ETA en continu
                 if (lastRouteCalculationTime > 0 && remainingDurationSeconds > 0) {
                     let elapsed = Math.round((Date.now() - lastRouteCalculationTime) / 1000);
                     let localEstimate = remainingDurationSeconds - elapsed;
@@ -570,10 +558,9 @@
 
         async function searchDestinationRoute() {
             if (!lastPosition) {
-                alert("Signal GPS manquant pour démarrer.");
+                alert("Signal GPS manquant.");
                 return;
             }
-
             if (targetDestinationName) {
                 if (confirm(`Arrêter le guidage vers ${targetDestinationName} ?`)) {
                     menuDeleteGpx();
@@ -581,7 +568,7 @@
                 }
             }
 
-            let destination = prompt("Entrez votre destination (Ex: Brest, Morlaix...) :");
+            let destination = prompt("Destination (Ex: Brest, Rennes...) :");
             if (!destination || destination.trim() === "") return;
 
             try {
@@ -603,36 +590,65 @@
                 executeSilentRecalculate(lastPosition.coords.latitude, lastPosition.coords.longitude, true);
 
             } catch (error) {
-                alert("Erreur de géocodage : " + error.message);
+                alert("Erreur : " + error.message);
             }
         }
 
+        // UTILISATION DE L'API OPENROUTE SERIVCE EN POST POUR ÉVITER LES AUTOROUTES (HIGHWAYS)
         async function executeSilentRecalculate(startLat, startLon, fitBounds = false) {
             if (!targetCoords || isCalculatingRoute) return;
             isCalculatingRoute = true;
             
             const routeBtn = document.getElementById('route-btn');
-            const originalText = routeBtn.innerText;
             routeBtn.innerText = "🔄 Recalcul...";
 
+            if (ORS_API_KEY === "VOTRE_CLE_API_OPENROUTESERVICE_ICI") {
+                alert("Veuillez configurer votre clé API OpenRouteService dans le code (ligne 197) pour filtrer les routes.");
+                isCalculatingRoute = false;
+                updateUI(0, totalDistance);
+                return;
+            }
+
             try {
-                let routeUrl = `https://router.project-osrm.org/route/v1/driving/${startLon},${startLat};${targetCoords.lon},${targetCoords.lat}?overview=full&geometries=geojson`;
-                let routeResponse = await fetch(routeUrl);
+                let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
+                
+                // Préparation du corps de la requête avec évitement des autoroutes (highways)
+                let bodyQuery = {
+                    coordinates: [[startLon, startLat], [targetCoords.lon, targetCoords.lat]],
+                    preference: "recommended",
+                    options: {
+                        avoid_features: ["highways"] // Évite les autoroutes et les voies express principales
+                    }
+                };
+
+                let routeResponse = await fetch(routeUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json, application/geo+json; charset=utf-8',
+                        'Content-Type': 'application/json',
+                        'Authorization': ORS_API_KEY
+                    },
+                    body: JSON.stringify(bodyQuery)
+                });
+                
                 let routeData = await routeResponse.json();
 
-                if (routeData.routes && routeData.routes.length > 0) {
-                    let coordinates = routeData.routes[0].geometry.coordinates;
+                if (routeData.features && routeData.features.length > 0) {
+                    let feature = routeData.features[0];
+                    let coordinates = feature.geometry.coordinates;
+                    
+                    // Inversion Longitude/Latitude pour Leaflet
                     gpxPoints = coordinates.map(coord => [coord[1], coord[0]]);
                     
-                    // Récupération de la durée totale estimée (fournie en secondes par l'API)
-                    remainingDurationSeconds = routeData.routes[0].duration;
+                    // ORS renvoie la durée dans summary.duration (en secondes)
+                    remainingDurationSeconds = feature.properties.summary.duration;
                     lastRouteCalculationTime = Date.now();
 
                     localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
                     drawGpxPolyline(fitBounds);
                 }
             } catch (e) {
-                console.error("Échec du recalcul automatique en tâche de fond", e);
+                console.error("Échec OpenRouteService", e);
             } finally {
                 isCalculatingRoute = false;
                 updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
@@ -679,7 +695,7 @@
                 console.error(error);
                 bleBtn.style.backgroundColor = "#ff007f";
                 bleBtn.innerText = "❌ Échec. Réessayer ?";
-                alert("Erreur de synchro Bluetooth : " + error.message);
+                alert("Erreur Bluetooth : " + error.message);
             }
         }
 
@@ -691,13 +707,11 @@
             const reader = new FileReader();
             reader.onload = function(e) {
                 const gpxText = e.target.result;
-                // Si import d'un GPX brut manuel, pas de cible de recalcul / d'ETA dynamique
                 targetDestinationName = null;
                 targetCoords = null;
                 remainingDurationSeconds = 0;
                 localStorage.removeItem('moto_target_name');
                 localStorage.removeItem('moto_target_coords');
-                
                 localStorage.setItem('moto_gpx_data', gpxText); 
                 parseAndDrawGpx(gpxText, true);
             };
@@ -760,7 +774,6 @@
             document.getElementById('speed').innerText = speed;
             document.getElementById('distance').innerText = distance.toFixed(1);
             
-            // Gestion du bouton de routage
             const routeBtn = document.getElementById('route-btn');
             if (targetDestinationName) {
                 routeBtn.innerText = `🛑 Stop : ${targetDestinationName}`;
@@ -770,11 +783,8 @@
                 routeBtn.style.backgroundColor = "#ff9500";
             }
 
-            // CALCUL DE L'ETA (Heure d'arrivée)
             if (targetDestinationName && remainingDurationSeconds > 0) {
                 let totalMinutesRestantes = Math.round(remainingDurationSeconds / 60);
-                
-                // Formater la durée (Ex: "45 min" ou "1h15")
                 if (totalMinutesRestantes < 60) {
                     document.getElementById('eta-duration').innerText = `${totalMinutesRestantes} min`;
                 } else {
@@ -783,7 +793,6 @@
                     document.getElementById('eta-duration').innerText = `${h}h${m < 10 ? '0' : ''}${m}`;
                 }
 
-                // Calculer l'heure exacte d'arrivée
                 let dateArrivee = new Date(Date.now() + remainingDurationSeconds * 1000);
                 let hours = dateArrivee.getHours();
                 let minutes = dateArrivee.getMinutes();
@@ -793,7 +802,6 @@
                 document.getElementById('eta-duration').innerText = "--";
             }
 
-            // Gestion des couleurs d'autonomie
             if (isConnectedBLE) {
                 document.getElementById('range').innerText = Math.round(currentRange);
                 document.getElementById('unit-label').innerText = "% live";
@@ -849,7 +857,7 @@
         function menuSetBattery() {
             closeModal();
             setTimeout(() => {
-                let inputPercent = prompt("Saisir le pourcentage de batterie (0-100) :", "100");
+                let inputPercent = prompt("Pourcentage de batterie (0-100) :", "100");
                 if (inputPercent !== null) {
                     let percentage = parseInt(inputPercent, 10);
                     if (!isNaN(percentage) && percentage >= 0 && percentage <= 100) {
