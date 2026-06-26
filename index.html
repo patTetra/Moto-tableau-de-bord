@@ -6,7 +6,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Moto Dash & GPX</title>
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         /* MODE JOUR PAR DÉFAUT */
@@ -164,7 +163,7 @@
             filter: var(--map-invert);
         }
 
-        /* Boutons principaux ajustés pour intégrer la recherche (Grille 2x2) */
+        /* Controls Grid */
         .controls {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -237,7 +236,7 @@
             transition: transform 0.1s linear, border-bottom-color 0.3s;
         }
 
-        /* POPUP DE OPTIONS ET THEME */
+        /* MODAL OPTIONS */
         .modal-shade {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -350,15 +349,13 @@
         <button id="ble-btn" class="btn btn-magenta btn-full" onclick="connectBluetoothMotos()">🔌 Connecter la Rezon Bohemia</button>
     </div>
 
-    <!-- Interface des boutons agencée sur 2 lignes pour intégrer la recherche -->
     <div class="controls">
         <button class="btn btn-green" onclick="triggerGpxUpload()">📁 Charger GPX</button>
-        <button class="btn btn-orange" onclick="searchDestinationRoute()">🔍 Trajet Direct</button>
+        <button id="route-btn" class="btn btn-orange" onclick="searchDestinationRoute()">🔍 Trajet Direct</button>
         <button class="btn btn-gray" onclick="openModal()">⚙️ Options</button>
         <button class="btn btn-blue" onclick="recenterMap()">🎯 Recentrer</button>
     </div>
 
-    <!-- FENÊTRE MODALE AVEC OPTIONS -->
     <div id="reset-modal" class="modal-shade" onclick="closeModal(event)">
         <div class="modal-box" onclick="event.stopPropagation()">
             <div class="modal-title">OPTIONS DE L'APPLICATION</div>
@@ -374,7 +371,6 @@
 
     <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const AUTONOMIE_MAX = 170;
@@ -392,6 +388,11 @@
         let autoCenterTimeout = null;
         let currentHeading = 0;
 
+        // Variables pour le recalcul automatique
+        let targetDestinationName = null;
+        let targetCoords = null; 
+        let isCalculatingRoute = false;
+
         let isConnectedBLE = false;
         const REZON_SERVICE_UUID = '0000e0ff-3c17-d293-8e48-14fe2e4da212';
         const REZON_CHAR_UUID    = '0000e101-3c17-d293-8e48-14fe2e4da212'; 
@@ -405,6 +406,12 @@
         }
         if (localStorage.getItem('moto_current_range')) {
             currentRange = parseFloat(localStorage.getItem('moto_current_range'));
+        }
+
+        // Restaurer la cible de navigation si présente
+        if (localStorage.getItem('moto_target_name') && localStorage.getItem('moto_target_coords')) {
+            targetDestinationName = localStorage.getItem('moto_target_name');
+            targetCoords = JSON.parse(localStorage.getItem('moto_target_coords'));
         }
         
         updateUI(0, totalDistance);
@@ -479,8 +486,10 @@
                     map.setView([lat, lon], 16);
                     rotateMap(currentHeading);
                 }
+                
+                // Vérification de déviation pour le recalcul automatique
                 if (gpxPoints.length > 0) {
-                    cleanPassedGpxPoints(lat, lon);
+                    checkRouteDeviationAndClean(lat, lon);
                 }
             }
 
@@ -512,55 +521,100 @@
             updateUI(speedKmh, totalDistance);
         }
 
-        // FONCTION DE CALCUL D'ITINÉRAIRE EN DIRECT ENTRÉ PAR L'UTILISATEUR
-        async function searchDestinationRoute() {
-            if (!lastPosition) {
-                alert("Impossible de calculer un itinéraire sans signal GPS actuel.");
+        // STRATÉGIE DE RECALCUL AUTOMATIQUE INTELLIGENT
+        function checkRouteDeviationAndClean(currentLat, currentLon) {
+            let closestIndex = -1;
+            let minDistance = Infinity;
+
+            // Trouver le point le plus proche sur notre ligne bleue
+            for (let i = 0; i < gpxPoints.length; i++) {
+                let dist = calculateDistance(currentLat, currentLon, gpxPoints[i][0], gpxPoints[i][1]);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    closestIndex = i;
+                }
+            }
+
+            // Déclencheur de recalcul : Éloignement > 150m (0.150 km)
+            if (targetCoords && minDistance > 0.150 && !isCalculatingRoute) {
+                console.log("Déviation détectée ! Recalcul automatique en cours...");
+                executeSilentRecalculate(currentLat, currentLon);
                 return;
             }
 
-            let destination = prompt("Où voulez-vous aller ? (Ex: Brest, Roscoff, Paris...)");
+            // Sinon nettoyage classique des points dépassés (si à moins de 150m)
+            if (closestIndex > 0 && minDistance < 0.150) {
+                gpxPoints.splice(0, closestIndex);
+                localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
+                drawGpxPolyline(false);            
+            }
+        }
+
+        // Lancement initial d'un trajet demandé par l'utilisateur
+        async function searchDestinationRoute() {
+            if (!lastPosition) {
+                alert("Signal GPS manquant pour démarrer.");
+                return;
+            }
+
+            // Si un guidage est déjà actif, cliquer sur le bouton permet de l'annuler proprement
+            if (targetDestinationName) {
+                if (confirm(`Arrêter le guidage vers ${targetDestinationName} ?`)) {
+                    menuDeleteGpx();
+                    return;
+                }
+            }
+
+            let destination = prompt("Entrez votre destination (Ex: Brest, Morlaix...) :");
             if (!destination || destination.trim() === "") return;
 
             try {
-                // Step 1 : Traduction du nom de la ville en coordonnées via Nominatim (Geocoding)
                 let geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(destination)}`;
                 let geoResponse = await fetch(geocodeUrl, { headers: { 'Accept-Language': 'fr' } });
                 let geoData = await geoResponse.json();
 
                 if (geoData.length === 0) {
-                    alert("Destination introuvable. Soyez plus précis.");
+                    alert("Destination inconnue.");
                     return;
                 }
 
-                let destLat = parseFloat(geoData[0].lat);
-                let destLon = parseFloat(geoData[0].lon);
-                let startLat = lastPosition.coords.latitude;
-                let startLon = lastPosition.coords.longitude;
+                targetDestinationName = geoData[0].display_name.split(',')[0];
+                targetCoords = { lat: parseFloat(geoData[0].lat), lon: parseFloat(geoData[0].lon) };
 
-                // Step 2 : Demander le tracé de la route à l'API de routage OSRM (Profil voiture/moto)
-                let routeUrl = `https://router.project-osrm.org/route/v1/driving/${startLon},${startLat};${destLon},${destLat}?overview=full&geometries=geojson`;
+                localStorage.setItem('moto_target_name', targetDestinationName);
+                localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
+
+                executeSilentRecalculate(lastPosition.coords.latitude, lastPosition.coords.longitude, true);
+
+            } catch (error) {
+                alert("Erreur de géocodage : " + error.message);
+            }
+        }
+
+        // Moteur de calcul transparent (utilisé pour l'initial et le recalcul auto)
+        async function executeSilentRecalculate(startLat, startLon, fitBounds = false) {
+            if (!targetCoords || isCalculatingRoute) return;
+            isCalculatingRoute = true;
+            
+            const routeBtn = document.getElementById('route-btn');
+            routeBtn.innerText = "🔄 Recalcul...";
+
+            try {
+                let routeUrl = `https://router.project-osrm.org/route/v1/driving/${startLon},${startLat};${targetCoords.lon},${targetCoords.lat}?overview=full&geometries=geojson`;
                 let routeResponse = await fetch(routeUrl);
                 let routeData = await routeResponse.json();
 
-                if (!routeData.routes || routeData.routes.length === 0) {
-                    alert("Impossible de calculer un itinéraire routier vers cette cible.");
-                    return;
+                if (routeData.routes && routeData.routes.length > 0) {
+                    let coordinates = routeData.routes[0].geometry.coordinates;
+                    gpxPoints = coordinates.map(coord => [coord[1], coord[0]]);
+                    localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
+                    drawGpxPolyline(fitBounds);
                 }
-
-                // Extraire les points (Attention, OSRM retourne [Lon, Lat] dans le GeoJSON)
-                let coordinates = routeData.routes[0].geometry.coordinates;
-                gpxPoints = coordinates.map(coord => [coord[1], coord[0]]);
-
-                // Sauvegarder localement la structure équivalente pour persistance au redémarrage
-                localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
-
-                // Dessiner et ajuster la carte
-                drawGpxPolyline(true);
-
-            } catch (error) {
-                console.error(error);
-                alert("Erreur lors de la création de la route : " + error.message);
+            } catch (e) {
+                console.error("Échec du recalcul automatique en tâche de fond", e);
+            } finally {
+                isCalculatingRoute = false;
+                updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
             }
         }
 
@@ -616,6 +670,12 @@
             const reader = new FileReader();
             reader.onload = function(e) {
                 const gpxText = e.target.result;
+                // Si import d'un GPX brut, on désactive le ciblage de routage automatique
+                targetDestinationName = null;
+                targetCoords = null;
+                localStorage.removeItem('moto_target_name');
+                localStorage.removeItem('moto_target_coords');
+                
                 localStorage.setItem('moto_gpx_data', gpxText); 
                 parseAndDrawGpx(gpxText, true);
             };
@@ -625,8 +685,6 @@
         function parseAndDrawGpx(storedData, fitBounds) {
             try {
                 if (gpxLayer) map.removeLayer(gpxLayer);
-                
-                // Gérer à la fois les anciens fichiers XML GPX et le stockage JSON de notre outil de routage direct
                 if (storedData.startsWith('[')) {
                     gpxPoints = JSON.parse(storedData);
                 } else {
@@ -661,28 +719,6 @@
             }
         }
 
-        function cleanPassedGpxPoints(currentLat, currentLon) {
-            if (gpxPoints.length === 0) return;
-            let closestIndex = -1;
-            let minDistance = Infinity;
-
-            for (let i = 0; i < gpxPoints.length; i++) {
-                let dist = calculateDistance(currentLat, currentLon, gpxPoints[i][0], gpxPoints[i][1]);
-                if (dist < minDistance) {
-                    minDistance = dist;
-                    closestIndex = i;
-                }
-            }
-
-            if (closestIndex > 0 && minDistance < 0.150) {
-                gpxPoints.splice(0, closestIndex);
-                
-                // Mettre à jour le cache local
-                localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
-                drawGpxPolyline(false);            
-            }
-        }
-
         function recenterMap() {
             autoCenter = true;
             if (lastPosition) {
@@ -702,6 +738,16 @@
             document.getElementById('speed').innerText = speed;
             document.getElementById('distance').innerText = distance.toFixed(1);
             
+            // Adapter le libellé du bouton de trajet
+            const routeBtn = document.getElementById('route-btn');
+            if (targetDestinationName) {
+                routeBtn.innerText = `🛑 Stop : ${targetDestinationName}`;
+                routeBtn.style.backgroundColor = "#ff3b30";
+            } else {
+                routeBtn.innerText = "🔍 Trajet Direct";
+                routeBtn.style.backgroundColor = "#ff9500";
+            }
+
             if (isConnectedBLE) {
                 document.getElementById('range').innerText = Math.round(currentRange);
                 document.getElementById('unit-label').innerText = "% live";
@@ -733,11 +779,7 @@
         function updateThemeButtonText() {
             const btn = document.getElementById('theme-toggle-btn');
             if (!btn) return;
-            if (isCurrentlyDark()) {
-                btn.innerText = "Passer en Mode Jour";
-            } else {
-                btn.innerText = "Passer en Mode Nuit";
-            }
+            btn.innerText = isCurrentlyDark() ? "Passer en Mode Jour" : "Passer en Mode Nuit";
         }
 
         function menuToggleTheme() {
@@ -775,7 +817,12 @@
             closeModal();
             gpxPoints = [];
             if (gpxLayer) map.removeLayer(gpxLayer);
+            targetDestinationName = null;
+            targetCoords = null;
             localStorage.removeItem('moto_gpx_data');
+            localStorage.removeItem('moto_target_name');
+            localStorage.removeItem('moto_target_coords');
+            updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
         }
 
         function saveAndRefresh() {
