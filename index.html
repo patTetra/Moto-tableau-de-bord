@@ -814,8 +814,8 @@
             routeBtn.innerText = "🔄 Recalcul...";
 
             try {
-                // Requête simplifiée au maximum pour éliminer tout bug de structure
-                let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
+                // PROFIL CYCLOMOTEUR / SECONDAIRE : Empêche d'emprunter les voies rapides / autoroutes
+                let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-roadbike/geojson`;
                 
                 let bodyQuery = {
                     coordinates: [
@@ -858,7 +858,6 @@
                 }
             } catch (e) {
                 console.error("Échec critique OpenRouteService :", e);
-                // ALERTE DIRECTE À L'ÉCRAN POUR LIRE LE CODE ERREUR
                 alert("Erreur de calcul d'itinéraire :\n" + e.message);
             } finally {
                 isCalculatingRoute = false;
