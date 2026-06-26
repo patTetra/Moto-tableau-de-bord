@@ -534,42 +534,55 @@
         updateUI(0, totalDistance);
 
         function initMap() {
-            map = L.map('map', { zoomControl: false, inertia: false }).setView([46.2276, 2.2137], 13);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '© OpenStreetMap'
-            }).addTo(map);
+    // Initialisation de la carte avec touch-action: none via CSS pour éviter le scroll
+    map = L.map('map', { 
+        zoomControl: false, 
+        inertia: false 
+    }).setView([46.2276, 2.2137], 13);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
 
-            const arrowIcon = L.divIcon({
-                className: 'custom-arrow-container',
-                html: '<div id="moto-arrow" class="arrow-marker"></div>',
-                iconSize: [28, 38],
-                iconAnchor: [14, 24] 
-            });
-            marker = L.marker([0, 0], { icon: arrowIcon }).addTo(map);
+    const arrowIcon = L.divIcon({
+        className: 'custom-arrow-container',
+        html: '<div id="moto-arrow" class="arrow-marker"></div>',
+        iconSize: [28, 38],
+        iconAnchor: [14, 24] 
+    });
+    marker = L.marker([0, 0], { icon: arrowIcon }).addTo(map);
 
-            map.on('dragstart zoomstart', () => { 
-                autoCenter = false; 
-                clearTimeout(autoCenterTimeout);
-                rotateMap(0); 
-                autoCenterTimeout = setTimeout(() => { autoCenter = true; }, 6000);
-            });
+    // Gestion de l'interruption du recentrage automatique
+    map.on('dragstart zoomstart', () => { 
+        autoCenter = false; 
+        clearTimeout(autoCenterTimeout);
+        rotateMap(0); 
+        autoCenterTimeout = setTimeout(() => { autoCenter = true; }, 6000);
+    });
 
-            map.on('mousedown touchstart', (e) => {
-                clearTimeout(pressTimer);
-                pressTimer = setTimeout(() => {
-                    handleLongPress(e.latlng);
-                }, 1000);
-            });
+    // --- CORRECTION DU LONG PRESS (Souri + Tactile iPhone) ---
+    map.on('mousedown', (e) => {
+        clearTimeout(pressTimer);
+        pressTimer = setTimeout(() => handleLongPress(e.latlng), 1000);
+    });
 
-            map.on('mouseup mousemove touchend touchmove contextmenu', () => {
-                clearTimeout(pressTimer);
-            });
+    map.on('touchstart', (e) => {
+        clearTimeout(pressTimer);
+        // Traduction de l'événement tactile en coordonnées LatLng
+        const latlng = map.mouseEventToLatLng(e.originalEvent.touches[0]);
+        pressTimer = setTimeout(() => handleLongPress(latlng), 1000);
+    });
 
-            if (localStorage.getItem('moto_gpx_data')) {
-                parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
-            }
-        }
+    map.on('mouseup mousemove touchend touchmove', () => {
+        clearTimeout(pressTimer);
+    });
+
+    // Chargement du GPX si existant
+    if (localStorage.getItem('moto_gpx_data')) {
+        parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
+    }
+}
 
         function handleLongPress(latlng) {
             if (targetDestinationName) {
