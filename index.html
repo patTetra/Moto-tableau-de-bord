@@ -6,6 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Moto Dash & GPX</title>
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         /* MODE JOUR PAR DÉFAUT */
@@ -92,7 +93,7 @@
 
         .top-dash {
             display: grid;
-            grid-template-columns: 1fr 0.9fr 0.9fr;
+            grid-template-columns: 1fr 1.1fr 0.9fr;
             gap: 10px;
             height: 130px;
             margin-bottom: 10px;
@@ -172,7 +173,6 @@
             filter: var(--map-invert);
         }
 
-        /* EN-TÊTE DE RECHERCHE PRÉDICTIVE */
         .search-overlay-bar {
             position: absolute;
             top: 10px;
@@ -432,8 +432,8 @@
                 <div><span id="distance" class="mini-value">0.0</span> <span style="font-size:0.75rem; color:var(--text-muted);">km</span></div>
             </div>
             <div class="mini-card">
-                <div class="mini-label">Autonomie</div>
-                <div><span id="range" class="mini-value">170</span> <span id="unit-label" style="font-size:0.75rem; color:var(--text-muted);">km</span></div>
+                <div id="range-label" class="mini-label">Autonomie</div>
+                <div><span id="range" class="mini-value">170</span> <span id="unit-label" style="font-size:0.75rem; color:var(--text-muted);">km restants</span></div>
             </div>
         </div>
         <div class="stats-stack">
@@ -486,9 +486,9 @@
 
     <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Clé API OpenRouteService intégrée automatiquement
         const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImY4MmQ4ZTYzNTYwYjQzNzM4NTEwZTU1YTBjNTlmNGQwIiwiaCI6Im11cm11cjY0In0=";
 
         const AUTONOMIE_MAX = 170;
@@ -501,7 +501,7 @@
         let marker = null;
         let gpxLayer = null; 
         let gpxPoints = []; 
-        let tempDestinationMarker = null; // Marqueur temporaire pour l'appui long
+        let tempDestinationMarker = null;
         
         let autoCenter = true;
         let autoCenterTimeout = null;
@@ -513,7 +513,7 @@
         let remainingDurationSeconds = 0; 
         let lastRouteCalculationTime = 0;  
         let autocompleteTimeout = null;
-        let pressTimer = null; // Timer pour détecter l'appui long
+        let pressTimer = null;
 
         let isConnectedBLE = false;
         const REZON_SERVICE_UUID = '0000e0ff-3c17-d293-8e48-14fe2e4da212';
@@ -550,7 +550,6 @@
             });
             marker = L.marker([0, 0], { icon: arrowIcon }).addTo(map);
 
-            // Événements pour la carte : glissement / zoom
             map.on('dragstart zoomstart', () => { 
                 autoCenter = false; 
                 clearTimeout(autoCenterTimeout);
@@ -558,7 +557,6 @@
                 autoCenterTimeout = setTimeout(() => { autoCenter = true; }, 6000);
             });
 
-            // Émulation de l'appui long (1 seconde) sur la carte
             map.on('mousedown touchstart', (e) => {
                 clearTimeout(pressTimer);
                 pressTimer = setTimeout(() => {
@@ -575,7 +573,6 @@
             }
         }
 
-        // Gestion de la logique de l'appui long
         function handleLongPress(latlng) {
             if (targetDestinationName) {
                 if (!confirm(`Arrêter le guidage vers ${targetDestinationName} pour choisir un nouveau point ?`)) {
@@ -584,11 +581,9 @@
                 menuDeleteGpx();
             }
 
-            // Ajoute un repère visuel standard temporaire là où l'utilisateur appuie
             if (tempDestinationMarker) map.removeLayer(tempDestinationMarker);
             tempDestinationMarker = L.marker(latlng).addTo(map);
 
-            // Timeout pour laisser le temps au thread de l'interface de s'ajuster
             setTimeout(() => {
                 if (confirm("Définir ce point sur la carte comme destination ?")) {
                     targetDestinationName = "Point sur la carte";
@@ -685,6 +680,16 @@
             updateUI(speedKmh, totalDistance);
         }
 
+        // Calcule la distance exacte restant sur l'itinéraire GPX actuel
+        function getRemainingTrajectoryDistance() {
+            if (!gpxPoints || gpxPoints.length < 2) return 0;
+            let routeDist = 0;
+            for (let i = 0; i < gpxPoints.length - 1; i++) {
+                routeDist += calculateDistance(gpxPoints[i][0], gpxPoints[i][1], gpxPoints[i+1][0], gpxPoints[i+1][1]);
+            }
+            return routeDist;
+        }
+
         function checkRouteDeviationAndClean(currentLat, currentLon) {
             let closestIndex = -1;
             let minDistance = Infinity;
@@ -716,7 +721,6 @@
             }
         }
 
-        /* GESTION DE LA BARRE DE RECHERCHE */
         function handleRouteBtnClick() {
             if (!lastPosition) {
                 alert("Signal GPS manquant.");
@@ -1002,15 +1006,41 @@
                 document.getElementById('eta-duration').innerText = "--";
             }
 
-            if (isConnectedBLE) {
-                document.getElementById('range').innerText = Math.round(currentRange);
-                document.getElementById('unit-label').innerText = "% live";
-                document.getElementById('range').style.color = (currentRange < 20) ? '#ff3b30' : 'var(--accent-color)';
+            // GESTION DU COMPARATIF DISTANCE TRAJET / AUTONOMIE
+            const rangeValueEl = document.getElementById('range');
+            const rangeLabelEl = document.getElementById('range-label');
+            const unitLabelEl = document.getElementById('unit-label');
+            
+            let displayRangeValue = Math.round(currentRange);
+            let actualRangeKm = isConnectedBLE ? (currentRange / 100) * AUTONOMIE_MAX : currentRange;
+
+            if (gpxPoints.length > 0) {
+                // Un tracé est actif (GPX ou Trajet Direct)
+                let remainingTripKm = getRemainingTrajectoryDistance();
+                
+                rangeLabelEl.innerText = "Trajet / Autonomie";
+                unitLabelEl.innerText = isConnectedBLE ? "km | % live" : "km";
+                rangeValueEl.innerText = `${Math.round(remainingTripKm)} / ${displayRangeValue}`;
+
+                // Comparaison logique pour la couleur
+                if (actualRangeKm < remainingTripKm) {
+                    rangeValueEl.style.color = "#ff3b30"; // Rouge : ça ne passe pas
+                } else {
+                    rangeValueEl.style.color = "#34c759"; // Vert : sécurisé
+                }
             } else {
-                document.getElementById('range').innerText = Math.round(currentRange);
-                document.getElementById('unit-label').innerText = "km restants";
-                const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-color').trim();
-                document.getElementById('range').style.color = (currentRange < 30) ? '#ff3b30' : textColor;
+                // Aucun trajet actif : retour à l'affichage standard
+                rangeLabelEl.innerText = "Autonomie";
+                rangeValueEl.innerText = displayRangeValue;
+                
+                if (isConnectedBLE) {
+                    unitLabelEl.innerText = "% live";
+                    rangeValueEl.style.color = (currentRange < 20) ? '#ff3b30' : 'var(--accent-color)';
+                } else {
+                    unitLabelEl.innerText = "km restants";
+                    const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-color').trim();
+                    rangeValueEl.style.color = (currentRange < 30) ? '#ff3b30' : textColor;
+                }
             }
             updateThemeButtonText();
         }
