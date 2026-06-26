@@ -6,7 +6,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Moto Dash & GPX</title>
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         /* MODE JOUR PAR DÉFAUT */
@@ -486,7 +485,6 @@
 
     <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImY4MmQ4ZTYzNTYwYjQzNzM4NTEwZTU1YTBjNTlmNGQwIiwiaCI6Im11cm11cjY0In0=";
@@ -680,7 +678,6 @@
             updateUI(speedKmh, totalDistance);
         }
 
-        // Calcule la distance exacte restant sur l'itinéraire GPX actuel
         function getRemainingTrajectoryDistance() {
             if (!gpxPoints || gpxPoints.length < 2) return 0;
             let routeDist = 0;
@@ -1006,30 +1003,29 @@
                 document.getElementById('eta-duration').innerText = "--";
             }
 
-            // GESTION DU COMPARATIF DISTANCE TRAJET / AUTONOMIE
             const rangeValueEl = document.getElementById('range');
             const rangeLabelEl = document.getElementById('range-label');
             const unitLabelEl = document.getElementById('unit-label');
             
             let displayRangeValue = Math.round(currentRange);
             let actualRangeKm = isConnectedBLE ? (currentRange / 100) * AUTONOMIE_MAX : currentRange;
+            const defaultTextColor = getComputedStyle(document.documentElement).getPropertyValue('--text-color').trim();
 
             if (gpxPoints.length > 0) {
-                // Un tracé est actif (GPX ou Trajet Direct)
-                let remainingTripKm = getRemainingTrajectoryDistance();
+                let remainingTripKm = Math.round(getRemainingTrajectoryDistance());
                 
                 rangeLabelEl.innerText = "Trajet / Autonomie";
                 unitLabelEl.innerText = isConnectedBLE ? "km | % live" : "km";
-                rangeValueEl.innerText = `${Math.round(remainingTripKm)} / ${displayRangeValue}`;
+                rangeValueEl.innerHTML = `${remainingTripKm} / <span id="dynamic-range-span">${displayRangeValue}</span>`;
 
-                // Comparaison logique pour la couleur
+                const rangeSpan = document.getElementById('dynamic-range-span');
                 if (actualRangeKm < remainingTripKm) {
-                    rangeValueEl.style.color = "#ff3b30"; // Rouge : ça ne passe pas
+                    rangeSpan.style.color = "#ff3b30";
                 } else {
-                    rangeValueEl.style.color = "#34c759"; // Vert : sécurisé
+                    rangeSpan.style.color = "#34c759";
                 }
+                rangeValueEl.style.color = defaultTextColor;
             } else {
-                // Aucun trajet actif : retour à l'affichage standard
                 rangeLabelEl.innerText = "Autonomie";
                 rangeValueEl.innerText = displayRangeValue;
                 
@@ -1038,8 +1034,7 @@
                     rangeValueEl.style.color = (currentRange < 20) ? '#ff3b30' : 'var(--accent-color)';
                 } else {
                     unitLabelEl.innerText = "km restants";
-                    const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-color').trim();
-                    rangeValueEl.style.color = (currentRange < 30) ? '#ff3b30' : textColor;
+                    rangeValueEl.style.color = (currentRange < 30) ? '#ff3b30' : defaultTextColor;
                 }
             }
             updateThemeButtonText();
