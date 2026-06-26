@@ -807,54 +807,63 @@
         }
 
         async function executeSilentRecalculate(startLat, startLon, fitBounds = false) {
-            if (!targetCoords || isCalculatingRoute) return;
-            isCalculatingRoute = true;
+    if (!targetCoords || isCalculatingRoute) return;
+    isCalculatingRoute = true;
+    
+    const routeBtn = document.getElementById('route-btn');
+    const originalText = routeBtn.innerText; 
+    routeBtn.innerText = "🔄 Calcul...";
+
+    try {
+        // Changement du profil pour 'cycling-road' pour éviter les grands axes
+        let routeUrl = `https://api.openrouteservice.org/v2/directions/cycling-road/geojson`;
+        
+        let bodyQuery = {
+            coordinates: [[startLon, startLat], [targetCoords.lon, targetCoords.lat]],
+            preference: "fastest",
+            units: "km"
+        };
+
+        let routeResponse = await fetch(routeUrl, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json, application/geo+json; charset=utf-8',
+                'Content-Type': 'application/json',
+                'Authorization': ORS_API_KEY
+            },
+            body: JSON.stringify(bodyQuery)
+        });
+        
+        let routeData = await routeResponse.json();
+
+        if (routeData.features && routeData.features.length > 0) {
+            let feature = routeData.features[0];
+            let coordinates = feature.geometry.coordinates;
             
-            const routeBtn = document.getElementById('route-btn');
-            routeBtn.innerText = "🔄 Recalcul...";
+            gpxPoints = coordinates.map(coord => [coord[1], coord[0]]);
+            
+            remainingDurationSeconds = feature.properties.summary.duration;
+            lastRouteCalculationTime = Date.now();
 
-            try {
-                let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
-                
-                let bodyQuery = {
-                    coordinates: [[startLon, startLat], [targetCoords.lon, targetCoords.lat]],
-                    preference: "recommended",
-                    options: {
-                        avoid_features: ["highways"] 
-                    }
-                };
-
-                let routeResponse = await fetch(routeUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json, application/geo+json; charset=utf-8',
-                        'Content-Type': 'application/json',
-                        'Authorization': ORS_API_KEY
-                    },
-                    body: JSON.stringify(bodyQuery)
-                });
-                
-                let routeData = await routeResponse.json();
-
-                if (routeData.features && routeData.features.length > 0) {
-                    let feature = routeData.features[0];
-                    let coordinates = feature.geometry.coordinates;
-                    
-                    gpxPoints = coordinates.map(coord => [coord[1], coord[0]]);
-                    
-                    remainingDurationSeconds = feature.properties.summary.duration;
-                    lastRouteCalculationTime = Date.now();
-
-                    localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
-                    drawGpxPolyline(fitBounds);
-                }
-            } catch (e) {
-                console.error("Échec OpenRouteService", e);
-            } finally {
-                isCalculatingRoute = false;
-                updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
-            }
+            localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
+            drawGpxPolyline(fitBounds);
+            
+            // Succès : retour au texte normal
+            routeBtn.innerText = `🛑 Stop : ${targetDestinationName}`;
+        } else {
+            throw new Error("Aucun itinéraire trouvé");
         }
+
+    } catch (e) {
+        console.error("Échec OpenRouteService", e);
+        alert("Erreur : Impossible de trouver un itinéraire (la distance est peut-être trop grande pour le mode balade).");
+        routeBtn.innerText = "❌ Erreur";
+        setTimeout(() => { routeBtn.innerText = originalText; }, 3000);
+    } finally {
+        isCalculatingRoute = false;
+        updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
+    }
+}
 
         async function connectBluetoothMotos() {
             const bleBtn = document.getElementById('ble-btn');
