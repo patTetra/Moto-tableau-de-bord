@@ -814,7 +814,8 @@
             routeBtn.innerText = "🔄 Recalcul...";
 
             try {
-                let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
+                // Changement de profil vers "driving-hgv" (poids lourd) pour appliquer des filtres d'évitement agressifs
+                let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-hgv/geojson`;
                 
                 let bodyQuery = {
                     coordinates: [
@@ -822,7 +823,19 @@
                         [parseFloat(targetCoords.lon), parseFloat(targetCoords.lat)]
                     ],
                     options: {
-                        avoid_features: ["highways", "tollways"]
+                        avoid_features: ["highways", "tollways"],
+                        profile_params: {
+                            weightings: {
+                                // Force l'algorithme à privilégier au maximum le réseau secondaire rural
+                                rural_decay_factor: 0.1
+                            },
+                            restrictions: {
+                                // Simuler une vitesse maximale faible pousse l'API à fuir les voies rapides
+                                max_speed: 80,
+                                // Interdit théoriquement les voies express urbaines/périphériques denses
+                                delivery_vehicles_only: false
+                            }
+                        }
                     }
                 };
 
@@ -854,7 +867,7 @@
                     localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
                     drawGpxPolyline(fitBounds);
                 } else {
-                    console.warn("Aucun itinéraire trouvé dans la réponse");
+                    console.warn("Aucun itinéraire alternatif trouvé");
                 }
             } catch (e) {
                 console.error("Échec critique OpenRouteService :", e);
