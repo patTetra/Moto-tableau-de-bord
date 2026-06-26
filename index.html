@@ -386,11 +386,9 @@
         let autoCenterTimeout = null;
         let currentHeading = 0;
 
-        // Variables Bluetooth
+        // Variables Bluetooth (UUID forcés en minuscules pour la compatibilité Web Bluetooth)
         let isConnectedBLE = false;
         const REZON_SERVICE_UUID = '0000e0ff-3c17-d293-8e48-14fe2e4da212';
-        // Note : On écoute la première caractéristique commune du service. Si le décodage nécessite un sous-index spécifique, 
-        // nous l'isolerons dans la fonction callback de réception.
         const REZON_CHAR_UUID    = '0000e101-3c17-d293-8e48-14fe2e4da212'; 
 
         // Chargement initial du thème
@@ -482,7 +480,6 @@
                 }
             }
 
-            // Seulement si le Bluetooth n'est pas connecté, on dégrade l'autonomie à l'estimation mathématique
             if (lastPosition && !isConnectedBLE) {
                 let dist = calculateDistance(lastPosition.coords.latitude, lastPosition.coords.longitude, lat, lon);
                 if (speedKmh > 2 || dist > 0.005) { 
@@ -500,7 +497,6 @@
                     localStorage.setItem('moto_current_range', currentRange);
                 }
             } else if (lastPosition && isConnectedBLE) {
-                // Si connecté en BLE, on incrémente quand même le totalisateur kilométrique GPS de la session
                 let dist = calculateDistance(lastPosition.coords.latitude, lastPosition.coords.longitude, lat, lon);
                 if (speedKmh > 2 || dist > 0.005) {
                     totalDistance += dist;
@@ -512,14 +508,15 @@
             updateUI(speedKmh, totalDistance);
         }
 
-        // FONCTION DE CONNEXION BLUETOOTH EN DIRECT
+        // RECHERCHE LIBRE COMPATIBLE BLUEFY / IPHONE
         async function connectBluetoothMotos() {
             const bleBtn = document.getElementById('ble-btn');
             try {
                 bleBtn.innerText = "⚡ Recherche de la Bohemia...";
                 
+                // Mode de scan "acceptAllDevices" pour forcer l'affichage sur Bluefy
                 const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'REZON_' }],
+                    acceptAllDevices: true,
                     optionalServices: [REZON_SERVICE_UUID]
                 });
 
@@ -528,8 +525,6 @@
                 
                 bleBtn.innerText = "⚡ Lecture des flux...";
                 const service = await server.getPrimaryService(REZON_SERVICE_UUID);
-                
-                // Essai de liaison sur la caractéristique principale du flux
                 const characteristic = await service.getCharacteristic(REZON_CHAR_UUID);
                 await characteristic.startNotifications();
                 
@@ -539,15 +534,10 @@
 
                 characteristic.addEventListener('characteristicvaluechanged', (event) => {
                     const value = event.target.value;
-                    
-                    // Récupération de l'octet (dépend de la trame Rezon)
-                    // Si la trame transmet le % brut sur l'octet 0 :
                     let batteryPercent = value.getUint8(0);
                     
-                    // Si la valeur est aberrante (0 ou >100) et qu'ils utilisent un autre offset, 
-                    // on peut ajuster ici : ex value.getUint8(1)
                     if (batteryPercent > 0 && batteryPercent <= 100) {
-                        currentRange = batteryPercent; // On stocke directement la valeur lue
+                        currentRange = batteryPercent;
                         updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
                     }
                 });
@@ -652,12 +642,10 @@
             document.getElementById('distance').innerText = distance.toFixed(1);
             
             if (isConnectedBLE) {
-                // Affichage direct du pourcentage récolté par Bluetooth
                 document.getElementById('range').innerText = Math.round(currentRange);
                 document.getElementById('unit-label').innerText = "% live";
                 document.getElementById('range').style.color = (currentRange < 20) ? '#ff3b30' : 'var(--accent-color)';
             } else {
-                // Affichage classique estimé en kilomètres
                 document.getElementById('range').innerText = Math.round(currentRange);
                 document.getElementById('unit-label').innerText = "km restants";
                 const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-color').trim();
