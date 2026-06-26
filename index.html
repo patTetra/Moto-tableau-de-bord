@@ -20,6 +20,8 @@
             --arrow-color: #ff3b30; 
             --gpx-color: #0055ff;   
             --modal-bg: rgba(255, 255, 255, 0.95);
+            --search-bg: #ffffff;
+            --search-border: rgba(0,0,0,0.1);
         }
 
         /* AUTO-BASCULEMENT EN MODE SOMBRE VIA LES RÉGLAGES IPHONE */
@@ -34,6 +36,8 @@
                 --arrow-color: #00ff66; 
                 --gpx-color: #00ccff;
                 --modal-bg: rgba(22, 22, 26, 0.95);
+                --search-bg: #1c1c1e;
+                --search-border: rgba(255,255,255,0.1);
             }
         }
 
@@ -48,6 +52,8 @@
             --arrow-color: #00ff66;
             --gpx-color: #00ccff;
             --modal-bg: rgba(22, 22, 26, 0.95);
+            --search-bg: #1c1c1e;
+            --search-border: rgba(255,255,255,0.1);
         }
 
         /* FORCE LE MODE JOUR MANUELLEMENT */
@@ -61,6 +67,8 @@
             --arrow-color: #ff3b30; 
             --gpx-color: #0055ff;   
             --modal-bg: rgba(255, 255, 255, 0.95);
+            --search-bg: #ffffff;
+            --search-border: rgba(0,0,0,0.1);
         }
 
         * {
@@ -163,6 +171,97 @@
 
         .leaflet-layer {
             filter: var(--map-invert);
+        }
+
+        /* EN-TÊTE DE RECHERCHE PRÉDICTIVE */
+        .search-overlay-bar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            pointer-events: none;
+        }
+
+        .search-input-wrapper {
+            display: flex;
+            background: var(--search-bg);
+            border: 1px solid var(--search-border);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            pointer-events: auto;
+            overflow: hidden;
+            height: 50px;
+            opacity: 0;
+            transform: translateY(-20px);
+            pointer-events: none;
+            transition: opacity 0.2s, transform 0.2s;
+        }
+
+        .search-input-wrapper.active {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        .search-input-wrapper input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 0 15px;
+            font-size: 1rem;
+            color: var(--text-color);
+            outline: none;
+            -webkit-user-select: text;
+            user-select: text;
+        }
+
+        .search-close-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 0 15px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .search-results-box {
+            background: var(--search-bg);
+            border-radius: 12px;
+            margin-top: 5px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            max-height: 220px;
+            overflow-y: auto;
+            display: none;
+            pointer-events: auto;
+            border: 1px solid var(--search-border);
+        }
+
+        .search-results-box.active {
+            display: block;
+        }
+
+        .search-item {
+            padding: 14px 15px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-color);
+            border-bottom: 1px solid var(--search-border);
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .search-item:last-child {
+            border-bottom: none;
+        }
+
+        .search-item:active {
+            background-color: rgba(142, 142, 147, 0.2);
         }
 
         .controls {
@@ -351,6 +450,15 @@
     </div>
 
     <div id="map-container">
+        <!-- BARRE DE RECHERCHE INTEGRÉE SUR LA CARTE -->
+        <div class="search-overlay-bar">
+            <div id="search-wrapper" class="search-input-wrapper">
+                <input type="text" id="search-input" placeholder="Où va-t-on ? (Ex: Morlaix, Brest...)" oninput="handleSearchTyping()">
+                <button class="search-close-btn" onclick="hideSearchField()">✕</button>
+            </div>
+            <div id="search-results" class="search-results-box"></div>
+        </div>
+        
         <div id="map"></div>
     </div>
 
@@ -360,7 +468,7 @@
 
     <div class="controls">
         <button class="btn btn-green" onclick="triggerGpxUpload()">📁 Charger GPX</button>
-        <button id="route-btn" class="btn btn-orange" onclick="searchDestinationRoute()">🔍 Trajet Direct</button>
+        <button id="route-btn" class="btn btn-orange" onclick="handleRouteBtnClick()">🔍 Trajet Direct</button>
         <button class="btn btn-gray" onclick="openModal()">⚙️ Options</button>
         <button class="btn btn-blue" onclick="recenterMap()">🎯 Recentrer</button>
     </div>
@@ -407,6 +515,7 @@
         let isCalculatingRoute = false;
         let remainingDurationSeconds = 0; 
         let lastRouteCalculationTime = 0;  
+        let autocompleteTimeout = null;
 
         let isConnectedBLE = false;
         const REZON_SERVICE_UUID = '0000e0ff-3c17-d293-8e48-14fe2e4da212';
@@ -559,7 +668,8 @@
             }
         }
 
-        async function searchDestinationRoute() {
+        /* GESTION DE LA BARRE DE RECHERCHE */
+        function handleRouteBtnClick() {
             if (!lastPosition) {
                 alert("Signal GPS manquant.");
                 return;
@@ -569,32 +679,84 @@
                     menuDeleteGpx();
                     return;
                 }
+            } else {
+                showSearchField();
+            }
+        }
+
+        function showSearchField() {
+            const wrapper = document.getElementById('search-wrapper');
+            const input = document.getElementById('search-input');
+            wrapper.classList.add('active');
+            input.value = "";
+            input.focus();
+        }
+
+        function hideSearchField() {
+            document.getElementById('search-wrapper').classList.remove('active');
+            const resultsBox = document.getElementById('search-results');
+            resultsBox.classList.remove('active');
+            resultsBox.innerHTML = "";
+        }
+
+        function handleSearchTyping() {
+            clearTimeout(autocompleteTimeout);
+            const query = document.getElementById('search-input').value.trim();
+            const resultsBox = document.getElementById('search-results');
+
+            if (query.length < 3) {
+                resultsBox.classList.remove('active');
+                resultsBox.innerHTML = "";
+                return;
             }
 
-            let destination = prompt("Destination (Ex: Brest, Rennes...) :");
-            if (!destination || destination.trim() === "") return;
+            // Attente de 350ms après la frappe pour éviter de saturer l'API (Debounce)
+            autocompleteTimeout = setTimeout(async () => {
+                try {
+                    let biasString = "";
+                    if (lastPosition) {
+                        biasString = `&lat=${lastPosition.coords.latitude}&lon=${lastPosition.coords.longitude}`;
+                    }
+                    
+                    let url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(query)}&countrycodes=fr${biasString}`;
+                    let response = await fetch(url, { headers: { 'Accept-Language': 'fr' } });
+                    let data = await response.json();
 
-            try {
-                let geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(destination)}`;
-                let geoResponse = await fetch(geocodeUrl, { headers: { 'Accept-Language': 'fr' } });
-                let geoData = await geoResponse.json();
+                    resultsBox.innerHTML = "";
+                    if (data.length > 0) {
+                        resultsBox.classList.add('active');
+                        data.forEach(item => {
+                            // On extrait un libellé plus court et lisible (Nom + Ville ou Département)
+                            let parts = item.display_name.split(',');
+                            let shortName = parts[0];
+                            if (parts[1]) shortName += `, ${parts[1].trim()}`;
+                            if (parts[2] && !isNaN(parts[2].trim())) shortName += ` (${parts[2].trim()})`;
 
-                if (geoData.length === 0) {
-                    alert("Destination inconnue.");
-                    return;
+                            let div = document.createElement('div');
+                            div.className = 'search-item';
+                            div.innerText = shortName;
+                            div.onclick = () => selectDestination(item, shortName);
+                            resultsBox.appendChild(div);
+                        });
+                    } else {
+                        resultsBox.classList.remove('active');
+                    }
+                } catch (e) {
+                    console.error("Erreur d'auto-complétion", e);
                 }
+            }, 350);
+        }
 
-                targetDestinationName = geoData[0].display_name.split(',')[0];
-                targetCoords = { lat: parseFloat(geoData[0].lat), lon: parseFloat(geoData[0].lon) };
+        function selectDestination(item, displayName) {
+            hideSearchField();
+            
+            targetDestinationName = displayName.split(',')[0];
+            targetCoords = { lat: parseFloat(item.lat), lon: parseFloat(item.lon) };
 
-                localStorage.setItem('moto_target_name', targetDestinationName);
-                localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
+            localStorage.setItem('moto_target_name', targetDestinationName);
+            localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
 
-                executeSilentRecalculate(lastPosition.coords.latitude, lastPosition.coords.longitude, true);
-
-            } catch (error) {
-                alert("Erreur : " + error.message);
-            }
+            executeSilentRecalculate(lastPosition.coords.latitude, lastPosition.coords.longitude, true);
         }
 
         async function executeSilentRecalculate(startLat, startLon, fitBounds = false) {
