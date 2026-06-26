@@ -501,6 +501,10 @@
         let gpxPoints = []; 
         let tempDestinationMarker = null;
         
+        // --- NOUVEAU: Gestion des étapes ---
+        let waypoints = []; 
+        // ------------------------------------
+
         let autoCenter = true;
         let autoCenterTimeout = null;
         let currentHeading = 0;
@@ -571,39 +575,20 @@
             }
         }
 
+        // --- NOUVEAU: Logique de gestion étapes/destination ---
         function handleLongPress(latlng) {
-            if (targetDestinationName) {
-                if (!confirm(`Arrêter le guidage vers ${targetDestinationName} pour choisir un nouveau point ?`)) {
-                    return;
-                }
-                menuDeleteGpx();
+            if (confirm("Ajouter comme étape (OK) ou définir comme destination finale (Annuler) ?")) {
+                waypoints.push({ lat: latlng.lat, lon: latlng.lng });
+            } else {
+                waypoints = []; 
+                targetDestinationName = "Destination";
+                targetCoords = { lat: latlng.lat, lon: latlng.lng };
+                localStorage.setItem('moto_target_name', targetDestinationName);
+                localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
             }
-
-            if (tempDestinationMarker) map.removeLayer(tempDestinationMarker);
-            tempDestinationMarker = L.marker(latlng).addTo(map);
-
-            setTimeout(() => {
-                if (confirm("Définir ce point sur la carte comme destination ?")) {
-                    targetDestinationName = "Point sur la carte";
-                    targetCoords = { lat: latlng.lat, lon: latlng.lng };
-
-                    localStorage.setItem('moto_target_name', targetDestinationName);
-                    localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
-
-                    executeSilentRecalculate(lastPosition ? lastPosition.coords.latitude : latlng.lat, lastPosition ? lastPosition.coords.longitude : latlng.lng, true);
-                    
-                    if (tempDestinationMarker) {
-                        map.removeLayer(tempDestinationMarker);
-                        tempDestinationMarker = null;
-                    }
-                } else {
-                    if (tempDestinationMarker) {
-                        map.removeLayer(tempDestinationMarker);
-                        tempDestinationMarker = null;
-                    }
-                }
-            }, 50);
+            executeSilentRecalculate(lastPosition ? lastPosition.coords.latitude : latlng.lat, lastPosition ? lastPosition.coords.longitude : latlng.lng, true);
         }
+        // ----------------------------------------------------
 
         function startApp() {
             if ("geolocation" in navigator) {
@@ -723,8 +708,8 @@
                 alert("Signal GPS manquant.");
                 return;
             }
-            if (targetDestinationName) {
-                if (confirm(`Arrêter le guidage vers ${targetDestinationName} ?`)) {
+            if (targetDestinationName || waypoints.length > 0) {
+                if (confirm(`Réinitialiser le trajet ?`)) {
                     menuDeleteGpx();
                     return;
                 }
@@ -796,62 +781,50 @@
 
         function selectDestination(item, displayName) {
             hideSearchField();
-            
             targetDestinationName = displayName.split(',')[0];
             targetCoords = { lat: parseFloat(item.lat), lon: parseFloat(item.lon) };
-
             localStorage.setItem('moto_target_name', targetDestinationName);
             localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
-
             executeSilentRecalculate(lastPosition.coords.latitude, lastPosition.coords.longitude, true);
         }
 
         async function executeSilentRecalculate(startLat, startLon, fitBounds = false) {
-            if (!targetCoords || isCalculatingRoute) return;
+            if (!targetCoords && waypoints.length === 0) return;
             isCalculatingRoute = true;
             
+            // --- NOUVEAU: Construction coordonnés avec étapes ---
+            let coordinates = [[startLon, startLat]];
+            waypoints.forEach(w => coordinates.push([w.lon, w.lat]));
+            if (targetCoords) coordinates.push([targetCoords.lon, targetCoords.lat]);
+            // ----------------------------------------------------
+
             const routeBtn = document.getElementById('route-btn');
             routeBtn.innerText = "🔄 Recalcul...";
 
             try {
                 let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
-                
                 let bodyQuery = {
-                    coordinates: [[startLon, startLat], [targetCoords.lon, targetCoords.lat]],
+                    coordinates: coordinates,
                     preference: "recommended",
-                    options: {
-                        avoid_features: ["highways"] 
-                    }
+                    options: { avoid_features: ["highways"] }
                 };
 
                 let routeResponse = await fetch(routeUrl, {
                     method: 'POST',
-                    headers: {
-                        'Accept': 'application/json, application/geo+json; charset=utf-8',
-                        'Content-Type': 'application/json',
-                        'Authorization': ORS_API_KEY
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': ORS_API_KEY },
                     body: JSON.stringify(bodyQuery)
                 });
                 
                 let routeData = await routeResponse.json();
-
                 if (routeData.features && routeData.features.length > 0) {
-                    let feature = routeData.features[0];
-                    let coordinates = feature.geometry.coordinates;
-                    
-                    gpxPoints = coordinates.map(coord => [coord[1], coord[0]]);
-                    
-                    remainingDurationSeconds = feature.properties.summary.duration;
+                    gpxPoints = routeData.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                    remainingDurationSeconds = routeData.features[0].properties.summary.duration;
                     lastRouteCalculationTime = Date.now();
-
                     localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
                     drawGpxPolyline(fitBounds);
                 }
-            } catch (e) {
-                console.error("Échec OpenRouteService", e);
-            } finally {
-                isCalculatingRoute = false;
+            } catch (e) { console.error("Échec ORS", e); } finally { 
+                isCalculatingRoute = false; 
                 updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
             }
         }
@@ -859,45 +832,21 @@
         async function connectBluetoothMotos() {
             const bleBtn = document.getElementById('ble-btn');
             try {
-                bleBtn.innerText = "⚡ Recherche de la Bohemia...";
-                const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: [REZON_SERVICE_UUID]
-                });
-
-                bleBtn.innerText = "⚡ Connexion au VCU Rezon...";
+                bleBtn.innerText = "⚡ Recherche...";
+                const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [REZON_SERVICE_UUID] });
+                bleBtn.innerText = "⚡ Connexion...";
                 const server = await device.gatt.connect();
-                
-                bleBtn.innerText = "⚡ Lecture des flux...";
                 const service = await server.getPrimaryService(REZON_SERVICE_UUID);
                 const characteristic = await service.getCharacteristic(REZON_CHAR_UUID);
                 await characteristic.startNotifications();
-                
                 isConnectedBLE = true;
                 bleBtn.style.backgroundColor = "#34c759";
-                bleBtn.innerText = "✅ Bohemia Connectée Live";
-
-                characteristic.addEventListener('characteristicvaluechanged', (event) => {
-                    const value = event.target.value;
-                    let batteryPercent = value.getUint8(0);
-                    if (batteryPercent > 0 && batteryPercent <= 100) {
-                        currentRange = batteryPercent;
-                        updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
-                    }
+                bleBtn.innerText = "✅ Bohemia Connectée";
+                characteristic.addEventListener('characteristicvaluechanged', (e) => {
+                    let b = e.target.value.getUint8(0);
+                    if (b > 0 && b <= 100) { currentRange = b; updateUI(0, totalDistance); }
                 });
-
-                device.addEventListener('gattserverdisconnected', () => {
-                    isConnectedBLE = false;
-                    bleBtn.style.backgroundColor = "#ff007f";
-                    bleBtn.innerText = "🔌 Relancer connexion Bohemia";
-                });
-
-            } catch (error) {
-                console.error(error);
-                bleBtn.style.backgroundColor = "#ff007f";
-                bleBtn.innerText = "❌ Échec. Réessayer ?";
-                alert("Erreur Bluetooth : " + error.message);
-            }
+            } catch (error) { bleBtn.style.backgroundColor = "#ff007f"; bleBtn.innerText = "❌ Échec"; }
         }
 
         function triggerGpxUpload() { document.getElementById('gpx-file').click(); }
@@ -907,14 +856,8 @@
             if (!file) return;
             const reader = new FileReader();
             reader.onload = function(e) {
-                const gpxText = e.target.result;
-                targetDestinationName = null;
-                targetCoords = null;
-                remainingDurationSeconds = 0;
-                localStorage.removeItem('moto_target_name');
-                localStorage.removeItem('moto_target_coords');
-                localStorage.setItem('moto_gpx_data', gpxText); 
-                parseAndDrawGpx(gpxText, true);
+                targetDestinationName = null; targetCoords = null; waypoints = [];
+                parseAndDrawGpx(e.target.result, true);
             };
             reader.readAsText(file);
         }
@@ -925,15 +868,9 @@
                 if (storedData.startsWith('[')) {
                     gpxPoints = JSON.parse(storedData);
                 } else {
-                    const parser = new DOMParser();
-                    const xmlDoc = parser.parseFromString(storedData, "text/xml");
-                    const trkpts = xmlDoc.getElementsByTagName("trkpt");
+                    const trkpts = new DOMParser().parseFromString(storedData, "text/xml").getElementsByTagName("trkpt");
                     gpxPoints = [];
-                    for (let i = 0; i < trkpts.length; i++) {
-                        let lat = parseFloat(trkpts[i].getAttribute("lat"));
-                        let lon = parseFloat(trkpts[i].getAttribute("lon"));
-                        if (!isNaN(lat) && !isNaN(lon)) gpxPoints.push([lat, lon]);
-                    }
+                    for (let i = 0; i < trkpts.length; i++) gpxPoints.push([parseFloat(trkpts[i].getAttribute("lat")), parseFloat(trkpts[i].getAttribute("lon"))]);
                 }
                 drawGpxPolyline(fitBounds);
             } catch (err) {}
@@ -942,177 +879,46 @@
         function drawGpxPolyline(fitBounds) {
             if (gpxPoints.length > 0) {
                 if (gpxLayer) map.removeLayer(gpxLayer);
-                const strokeColor = getComputedStyle(document.documentElement).getPropertyValue('--gpx-color').trim();
-                gpxLayer = L.polyline(gpxPoints, {color: strokeColor, weight: 7, opacity: 0.85}).addTo(map);
-                if (fitBounds) {
-                    autoCenter = false;
-                    rotateMap(0);
-                    map.fitBounds(gpxLayer.getBounds());
-                    clearTimeout(autoCenterTimeout);
-                    autoCenterTimeout = setTimeout(() => { autoCenter = true; }, 8000);
-                }
-            } else if (gpxLayer) {
-                map.removeLayer(gpxLayer);
+                gpxLayer = L.polyline(gpxPoints, {color: '#0055ff', weight: 7, opacity: 0.85}).addTo(map);
+                if (fitBounds) map.fitBounds(gpxLayer.getBounds());
             }
         }
 
         function recenterMap() {
             autoCenter = true;
-            if (lastPosition) {
-                map.setView([lastPosition.coords.latitude, lastPosition.coords.longitude], 16);
-                rotateMap(currentHeading);
-            }
+            if (lastPosition) map.setView([lastPosition.coords.latitude, lastPosition.coords.longitude], 16);
         }
 
         function calculateDistance(lat1, lon1, lat2, lon2) {
             const R = 6371;
-            let dLat = (lat2 - lat1) * Math.PI / 180; let dLon = (lon2 - lon1) * Math.PI / 180;
-            let a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            let dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+            let a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
             return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
         }
 
         function updateUI(speed, distance) {
             document.getElementById('speed').innerText = speed;
             document.getElementById('distance').innerText = distance.toFixed(1);
-            
             const routeBtn = document.getElementById('route-btn');
-            if (targetDestinationName) {
-                routeBtn.innerText = `🛑 Stop : ${targetDestinationName}`;
-                routeBtn.style.backgroundColor = "#ff3b30";
-            } else {
-                routeBtn.innerText = "🔍 Trajet Direct";
-                routeBtn.style.backgroundColor = "#ff9500";
-            }
-
-            if (targetDestinationName && remainingDurationSeconds > 0) {
-                let totalMinutesRestantes = Math.round(remainingDurationSeconds / 60);
-                if (totalMinutesRestantes < 60) {
-                    document.getElementById('eta-duration').innerText = `${totalMinutesRestantes} min`;
-                } else {
-                    let h = Math.floor(totalMinutesRestantes / 60);
-                    let m = totalMinutesRestantes % 60;
-                    document.getElementById('eta-duration').innerText = `${h}h${m < 10 ? '0' : ''}${m}`;
-                }
-
-                let dateArrivee = new Date(Date.now() + remainingDurationSeconds * 1000);
-                let hours = dateArrivee.getHours();
-                let minutes = dateArrivee.getMinutes();
-                document.getElementById('eta-time').innerText = `${hours}:${minutes < 10 ? '0' : ''}${minutes}`;
-            } else {
-                document.getElementById('eta-time').innerText = "--:--";
-                document.getElementById('eta-duration').innerText = "--";
-            }
-
-            const rangeValueEl = document.getElementById('range');
-            const rangeLabelEl = document.getElementById('range-label');
-            const unitLabelEl = document.getElementById('unit-label');
-            
-            let displayRangeValue = Math.round(currentRange);
-            let actualRangeKm = isConnectedBLE ? (currentRange / 100) * AUTONOMIE_MAX : currentRange;
-            const defaultTextColor = getComputedStyle(document.documentElement).getPropertyValue('--text-color').trim();
-
-            if (gpxPoints.length > 0) {
-                let remainingTripKm = Math.round(getRemainingTrajectoryDistance());
-                
-                rangeLabelEl.innerText = "Trajet / Autonomie";
-                unitLabelEl.innerText = isConnectedBLE ? "km | % live" : "km";
-                rangeValueEl.innerHTML = `${remainingTripKm} / <span id="dynamic-range-span">${displayRangeValue}</span>`;
-
-                const rangeSpan = document.getElementById('dynamic-range-span');
-                if (actualRangeKm < remainingTripKm) {
-                    rangeSpan.style.color = "#ff3b30";
-                } else {
-                    rangeSpan.style.color = "#34c759";
-                }
-                rangeValueEl.style.color = defaultTextColor;
-            } else {
-                rangeLabelEl.innerText = "Autonomie";
-                rangeValueEl.innerText = displayRangeValue;
-                
-                if (isConnectedBLE) {
-                    unitLabelEl.innerText = "% live";
-                    rangeValueEl.style.color = (currentRange < 20) ? '#ff3b30' : 'var(--accent-color)';
-                } else {
-                    unitLabelEl.innerText = "km restants";
-                    rangeValueEl.style.color = (currentRange < 30) ? '#ff3b30' : defaultTextColor;
-                }
-            }
-            updateThemeButtonText();
+            routeBtn.innerText = (targetDestinationName || waypoints.length > 0) ? "🛑 Stop Trajet" : "🔍 Trajet Direct";
         }
 
-        function openModal() {
-            updateThemeButtonText();
-            document.getElementById('reset-modal').classList.add('active');
-        }
-
-        function closeModal() {
-            document.getElementById('reset-modal').classList.remove('active');
-        }
-
-        function isCurrentlyDark() {
-            if (document.documentElement.classList.contains('force-dark')) return true;
-            if (document.documentElement.classList.contains('force-light')) return false;
-            return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        }
-
-        function updateThemeButtonText() {
-            const btn = document.getElementById('theme-toggle-btn');
-            if (!btn) return;
-            btn.innerText = isCurrentlyDark() ? "Passer en Mode Jour" : "Passer en Mode Nuit";
-        }
-
-        function menuToggleTheme() {
+        function openModal() { document.getElementById('reset-modal').classList.add('active'); }
+        function closeModal() { document.getElementById('reset-modal').classList.remove('active'); }
+        function menuToggleTheme() { 
+            document.documentElement.className = (document.documentElement.className === "force-dark") ? "force-light" : "force-dark"; 
+            localStorage.setItem('moto_theme', document.documentElement.className);
             closeModal();
-            if (isCurrentlyDark()) {
-                document.documentElement.className = "force-light";
-                localStorage.setItem('moto_theme', 'force-light');
-            } else {
-                document.documentElement.className = "force-dark";
-                localStorage.setItem('moto_theme', 'force-dark');
-            }
-            if (localStorage.getItem('moto_gpx_data')) parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
-            updateUI(0, totalDistance);
         }
-
-        function menuResetFull() {
-            closeModal();
-            currentRange = AUTONOMIE_MAX; totalDistance = 0; saveAndRefresh();
+        function menuResetFull() { currentRange = AUTONOMIE_MAX; totalDistance = 0; closeModal(); }
+        function menuSetBattery() { let b = prompt("Batterie %:"); if(b) { currentRange = (b/100)*AUTONOMIE_MAX; closeModal(); } }
+        function menuDeleteGpx() { 
+            waypoints = []; gpxPoints = []; targetDestinationName = null; targetCoords = null; 
+            if (gpxLayer) map.removeLayer(gpxLayer); 
+            closeModal(); 
+            updateUI(0, totalDistance); 
         }
-
-        function menuSetBattery() {
-            closeModal();
-            setTimeout(() => {
-                let inputPercent = prompt("Pourcentage de batterie (0-100) :", "100");
-                if (inputPercent !== null) {
-                    let percentage = parseInt(inputPercent, 10);
-                    if (!isNaN(percentage) && percentage >= 0 && percentage <= 100) {
-                        currentRange = (percentage / 100) * AUTONOMIE_MAX; totalDistance = 0; saveAndRefresh();
-                    }
-                }
-            }, 300);
-        }
-
-        function menuDeleteGpx() {
-            closeModal();
-            gpxPoints = [];
-            if (gpxLayer) map.removeLayer(gpxLayer);
-            targetDestinationName = null;
-            targetCoords = null;
-            remainingDurationSeconds = 0;
-            localStorage.removeItem('moto_gpx_data');
-            localStorage.removeItem('moto_target_name');
-            localStorage.removeItem('moto_target_coords');
-            updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
-        }
-
-        function saveAndRefresh() {
-            localStorage.setItem('moto_current_range', currentRange);
-            localStorage.setItem('moto_distance', totalDistance);
-            lastPosition = null;
-            updateUI(0, totalDistance);
-        }
-
-        function handleError(error) { console.warn(`GPS Error: ${error.message}`); }
+        function handleError(e) { console.warn(e.message); }
     </script>
 </body>
 </html>
