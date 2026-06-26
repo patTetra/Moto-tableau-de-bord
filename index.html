@@ -6,7 +6,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Moto Dash & GPX</title>
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         /* MODE JOUR PAR DÉFAUT */
@@ -486,7 +485,6 @@
 
     <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImY4MmQ4ZTYzNTYwYjQzNzM4NTEwZTU1YTBjNTlmNGQwIiwiaCI6Im11cm11cjY0In0=";
@@ -816,17 +814,14 @@
             routeBtn.innerText = "🔄 Recalcul...";
 
             try {
-                // Retour au profil standard stable driving-car
+                // Requête simplifiée au maximum pour éliminer tout bug de structure
                 let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
                 
                 let bodyQuery = {
                     coordinates: [
                         [parseFloat(startLon), parseFloat(startLat)], 
                         [parseFloat(targetCoords.lon), parseFloat(targetCoords.lat)]
-                    ],
-                    // Évitement strict des voies rapides/autoroutes + mode trajet court pour éviter la voie express
-                    avoid_features: ["highways", "tollways"],
-                    preference: "shortest"
+                    ]
                 };
 
                 let routeResponse = await fetch(routeUrl, {
@@ -840,7 +835,8 @@
                 });
                 
                 if (!routeResponse.ok) {
-                    throw new Error(`Erreur API: ${routeResponse.status}`);
+                    let errText = await routeResponse.text();
+                    throw new Error(`Code HTTP ${routeResponse.status} - ${errText}`);
                 }
 
                 let routeData = await routeResponse.json();
@@ -849,6 +845,7 @@
                     let feature = routeData.features[0];
                     let coordinates = feature.geometry.coordinates;
                     
+                    // Conversion Long,Lat en Lat,Lon pour Leaflet
                     gpxPoints = coordinates.map(coord => [coord[1], coord[0]]);
                     
                     remainingDurationSeconds = feature.properties.summary.duration;
@@ -857,10 +854,12 @@
                     localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
                     drawGpxPolyline(fitBounds);
                 } else {
-                    console.warn("Aucun itinéraire alternatif trouvé");
+                    alert("ORS n'a renvoyé aucun tracé pour ces coordonnées.");
                 }
             } catch (e) {
                 console.error("Échec critique OpenRouteService :", e);
+                // ALERTE DIRECTE À L'ÉCRAN POUR LIRE LE CODE ERREUR
+                alert("Erreur de calcul d'itinéraire :\n" + e.message);
             } finally {
                 isCalculatingRoute = false;
                 let currentSpeed = parseInt(document.getElementById('speed').innerText) || 0;
