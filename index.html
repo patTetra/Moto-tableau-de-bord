@@ -814,17 +814,13 @@
             routeBtn.innerText = "🔄 Recalcul...";
 
             try {
-                // On garde le profil 'driving-car' qui est le plus stable pour le GPS,
-                // mais on ajoute une contrainte plus forte sur l'évitement.
                 let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
                 
                 let bodyQuery = {
                     coordinates: [[startLon, startLat], [targetCoords.lon, targetCoords.lat]],
                     preference: "recommended",
                     options: {
-                        // On exclut les autoroutes et les routes à péage (tollways)
-                        // Cela force l'API à privilégier les routes départementales et secondaires.
-                        avoid_features: ["highways", "tollways", "ferries"] 
+                        avoid_features: ["highways"] 
                     }
                 };
 
@@ -856,7 +852,7 @@
                 console.error("Échec OpenRouteService", e);
             } finally {
                 isCalculatingRoute = false;
-                updateUI(Math.round(document.getElementById('speed').innerText || 0), totalDistance);
+                updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
             }
         }
 
