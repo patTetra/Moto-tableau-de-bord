@@ -6,7 +6,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Moto Dash & GPX</title>
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         /* MODE JOUR PAR DÉFAUT */
@@ -486,7 +485,6 @@
 
     <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImY4MmQ4ZTYzNTYwYjQzNzM4NTEwZTU1YTBjNTlmNGQwIiwiaCI6Im11cm11cjY0In0=";
@@ -822,13 +820,12 @@
                     coordinates: [[startLon, startLat], [targetCoords.lon, targetCoords.lat]],
                     preference: "recommended",
                     options: {
+                        // "highways" évite les autoroutes et les grosses bretelles rapides à double sens
                         avoid_features: ["highways", "tollways"],
                         profile_params: {
                             weightings: {
-                                green: 0.9
-                            },
-                            restrictions: {
-                                max_speed: 90
+                                // Augmenter le steer_factor pousse le routage à quitter les grands axes routiers (comme la N12) au profit des départementales
+                                steer_factor: 1.5
                             }
                         }
                     }
