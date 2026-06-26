@@ -6,6 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Moto Dash & GPX</title>
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         /* MODE JOUR PAR DÉFAUT */
@@ -364,6 +365,7 @@
         <button class="btn btn-blue" onclick="recenterMap()">🎯 Recentrer</button>
     </div>
 
+    <!-- FENÊTRE MODALE -->
     <div id="reset-modal" class="modal-shade" onclick="closeModal(event)">
         <div class="modal-box" onclick="event.stopPropagation()">
             <div class="modal-title">OPTIONS DE L'APPLICATION</div>
@@ -379,10 +381,11 @@
 
     <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // ⚠️ METTEZ VOTRE CLÉ OPENROUTESERVICE CI-DESSOUS POUR QUE LE FILTRAGE FONCTIONNE
-        const ORS_API_KEY = "VOTRE_CLE_API_OPENROUTESERVICE_ICI";
+        // Clé API OpenRouteService intégrée automatiquement
+        const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImY4MmQ4ZTYzNTYwYjQzNzM4NTEwZTU1YTBjNTlmNGQwIiwiaCI6Im11cm11cjY0In0=";
 
         const AUTONOMIE_MAX = 170;
         let totalDistance = 0; 
@@ -594,7 +597,6 @@
             }
         }
 
-        // UTILISATION DE L'API OPENROUTE SERIVCE EN POST POUR ÉVITER LES AUTOROUTES (HIGHWAYS)
         async function executeSilentRecalculate(startLat, startLon, fitBounds = false) {
             if (!targetCoords || isCalculatingRoute) return;
             isCalculatingRoute = true;
@@ -602,22 +604,14 @@
             const routeBtn = document.getElementById('route-btn');
             routeBtn.innerText = "🔄 Recalcul...";
 
-            if (ORS_API_KEY === "VOTRE_CLE_API_OPENROUTESERVICE_ICI") {
-                alert("Veuillez configurer votre clé API OpenRouteService dans le code (ligne 197) pour filtrer les routes.");
-                isCalculatingRoute = false;
-                updateUI(0, totalDistance);
-                return;
-            }
-
             try {
                 let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
                 
-                // Préparation du corps de la requête avec évitement des autoroutes (highways)
                 let bodyQuery = {
                     coordinates: [[startLon, startLat], [targetCoords.lon, targetCoords.lat]],
                     preference: "recommended",
                     options: {
-                        avoid_features: ["highways"] // Évite les autoroutes et les voies express principales
+                        avoid_features: ["highways"] 
                     }
                 };
 
@@ -637,10 +631,8 @@
                     let feature = routeData.features[0];
                     let coordinates = feature.geometry.coordinates;
                     
-                    // Inversion Longitude/Latitude pour Leaflet
                     gpxPoints = coordinates.map(coord => [coord[1], coord[0]]);
                     
-                    // ORS renvoie la durée dans summary.duration (en secondes)
                     remainingDurationSeconds = feature.properties.summary.duration;
                     lastRouteCalculationTime = Date.now();
 
