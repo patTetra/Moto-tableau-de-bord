@@ -6,6 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Moto Dash & GPX</title>
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         /* MODE JOUR PAR DÉFAUT */
@@ -163,10 +164,10 @@
             filter: var(--map-invert);
         }
 
-        /* Boutons principaux */
+        /* Boutons principaux ajustés pour intégrer la recherche (Grille 2x2) */
         .controls {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr;
             gap: 8px;
             margin-top: 10px;
         }
@@ -182,7 +183,7 @@
             color: white;
             border: none;
             border-radius: 10px;
-            padding: 14px 5px;
+            padding: 12px 5px;
             font-size: 0.85rem;
             font-weight: 600;
             text-align: center;
@@ -199,6 +200,7 @@
         .btn-blue { background-color: #007aff; }
         .btn-green { background-color: #34c759; }
         .btn-magenta { background-color: #ff007f; }
+        .btn-orange { background-color: #ff9500; }
 
         #gpx-file { display: none; }
 
@@ -235,7 +237,7 @@
             transition: transform 0.1s linear, border-bottom-color 0.3s;
         }
 
-        /* POPUP DE RESET ET THEME */
+        /* POPUP DE OPTIONS ET THEME */
         .modal-shade {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -348,19 +350,22 @@
         <button id="ble-btn" class="btn btn-magenta btn-full" onclick="connectBluetoothMotos()">🔌 Connecter la Rezon Bohemia</button>
     </div>
 
+    <!-- Interface des boutons agencée sur 2 lignes pour intégrer la recherche -->
     <div class="controls">
-        <button class="btn btn-gray" onclick="openModal()">Reset</button>
-        <button class="btn btn-green" onclick="triggerGpxUpload()">Charger GPX</button>
-        <button class="btn btn-blue" onclick="recenterMap()">Recentrer</button>
+        <button class="btn btn-green" onclick="triggerGpxUpload()">📁 Charger GPX</button>
+        <button class="btn btn-orange" onclick="searchDestinationRoute()">🔍 Trajet Direct</button>
+        <button class="btn btn-gray" onclick="openModal()">⚙️ Options</button>
+        <button class="btn btn-blue" onclick="recenterMap()">🎯 Recentrer</button>
     </div>
 
+    <!-- FENÊTRE MODALE AVEC OPTIONS -->
     <div id="reset-modal" class="modal-shade" onclick="closeModal(event)">
         <div class="modal-box" onclick="event.stopPropagation()">
             <div class="modal-title">OPTIONS DE L'APPLICATION</div>
             <div class="modal-menu-stack">
                 <button class="modal-btn" onclick="menuResetFull()">Remettre à zéro (Faire le Plein)</button>
                 <button class="modal-btn" onclick="menuSetBattery()">Saisir le % de batterie</button>
-                <button class="modal-btn modal-btn-danger" onclick="menuDeleteGpx()">Supprimer le tracé GPX</button>
+                <button class="modal-btn modal-btn-danger" onclick="menuDeleteGpx()">Supprimer le tracé actuel</button>
                 <button id="theme-toggle-btn" class="modal-btn" onclick="menuToggleTheme()">Passer en Mode Nuit</button>
                 <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Fermer</button>
             </div>
@@ -369,6 +374,7 @@
 
     <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const AUTONOMIE_MAX = 170;
@@ -386,12 +392,10 @@
         let autoCenterTimeout = null;
         let currentHeading = 0;
 
-        // Variables Bluetooth (UUID forcés en minuscules pour la compatibilité Web Bluetooth)
         let isConnectedBLE = false;
         const REZON_SERVICE_UUID = '0000e0ff-3c17-d293-8e48-14fe2e4da212';
         const REZON_CHAR_UUID    = '0000e101-3c17-d293-8e48-14fe2e4da212'; 
 
-        // Chargement initial du thème
         if (localStorage.getItem('moto_theme')) {
             document.documentElement.className = localStorage.getItem('moto_theme');
         }
@@ -508,13 +512,62 @@
             updateUI(speedKmh, totalDistance);
         }
 
-        // RECHERCHE LIBRE COMPATIBLE BLUEFY / IPHONE
+        // FONCTION DE CALCUL D'ITINÉRAIRE EN DIRECT ENTRÉ PAR L'UTILISATEUR
+        async function searchDestinationRoute() {
+            if (!lastPosition) {
+                alert("Impossible de calculer un itinéraire sans signal GPS actuel.");
+                return;
+            }
+
+            let destination = prompt("Où voulez-vous aller ? (Ex: Brest, Roscoff, Paris...)");
+            if (!destination || destination.trim() === "") return;
+
+            try {
+                // Step 1 : Traduction du nom de la ville en coordonnées via Nominatim (Geocoding)
+                let geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(destination)}`;
+                let geoResponse = await fetch(geocodeUrl, { headers: { 'Accept-Language': 'fr' } });
+                let geoData = await geoResponse.json();
+
+                if (geoData.length === 0) {
+                    alert("Destination introuvable. Soyez plus précis.");
+                    return;
+                }
+
+                let destLat = parseFloat(geoData[0].lat);
+                let destLon = parseFloat(geoData[0].lon);
+                let startLat = lastPosition.coords.latitude;
+                let startLon = lastPosition.coords.longitude;
+
+                // Step 2 : Demander le tracé de la route à l'API de routage OSRM (Profil voiture/moto)
+                let routeUrl = `https://router.project-osrm.org/route/v1/driving/${startLon},${startLat};${destLon},${destLat}?overview=full&geometries=geojson`;
+                let routeResponse = await fetch(routeUrl);
+                let routeData = await routeResponse.json();
+
+                if (!routeData.routes || routeData.routes.length === 0) {
+                    alert("Impossible de calculer un itinéraire routier vers cette cible.");
+                    return;
+                }
+
+                // Extraire les points (Attention, OSRM retourne [Lon, Lat] dans le GeoJSON)
+                let coordinates = routeData.routes[0].geometry.coordinates;
+                gpxPoints = coordinates.map(coord => [coord[1], coord[0]]);
+
+                // Sauvegarder localement la structure équivalente pour persistance au redémarrage
+                localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
+
+                // Dessiner et ajuster la carte
+                drawGpxPolyline(true);
+
+            } catch (error) {
+                console.error(error);
+                alert("Erreur lors de la création de la route : " + error.message);
+            }
+        }
+
         async function connectBluetoothMotos() {
             const bleBtn = document.getElementById('ble-btn');
             try {
                 bleBtn.innerText = "⚡ Recherche de la Bohemia...";
-                
-                // Mode de scan "acceptAllDevices" pour forcer l'affichage sur Bluefy
                 const device = await navigator.bluetooth.requestDevice({
                     acceptAllDevices: true,
                     optionalServices: [REZON_SERVICE_UUID]
@@ -535,7 +588,6 @@
                 characteristic.addEventListener('characteristicvaluechanged', (event) => {
                     const value = event.target.value;
                     let batteryPercent = value.getUint8(0);
-                    
                     if (batteryPercent > 0 && batteryPercent <= 100) {
                         currentRange = batteryPercent;
                         updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
@@ -570,17 +622,23 @@
             reader.readAsText(file);
         }
 
-        function parseAndDrawGpx(xmlText, fitBounds) {
+        function parseAndDrawGpx(storedData, fitBounds) {
             try {
                 if (gpxLayer) map.removeLayer(gpxLayer);
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-                const trkpts = xmlDoc.getElementsByTagName("trkpt");
-                gpxPoints = [];
-                for (let i = 0; i < trkpts.length; i++) {
-                    let lat = parseFloat(trkpts[i].getAttribute("lat"));
-                    let lon = parseFloat(trkpts[i].getAttribute("lon"));
-                    if (!isNaN(lat) && !isNaN(lon)) gpxPoints.push([lat, lon]);
+                
+                // Gérer à la fois les anciens fichiers XML GPX et le stockage JSON de notre outil de routage direct
+                if (storedData.startsWith('[')) {
+                    gpxPoints = JSON.parse(storedData);
+                } else {
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(storedData, "text/xml");
+                    const trkpts = xmlDoc.getElementsByTagName("trkpt");
+                    gpxPoints = [];
+                    for (let i = 0; i < trkpts.length; i++) {
+                        let lat = parseFloat(trkpts[i].getAttribute("lat"));
+                        let lon = parseFloat(trkpts[i].getAttribute("lon"));
+                        if (!isNaN(lat) && !isNaN(lon)) gpxPoints.push([lat, lon]);
+                    }
                 }
                 drawGpxPolyline(fitBounds);
             } catch (err) {}
@@ -618,6 +676,9 @@
 
             if (closestIndex > 0 && minDistance < 0.150) {
                 gpxPoints.splice(0, closestIndex);
+                
+                // Mettre à jour le cache local
+                localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
                 drawGpxPolyline(false);            
             }
         }
