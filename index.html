@@ -1019,7 +1019,8 @@
                 rangeValueEl.innerHTML = `${remainingTripKm} / <span id="dynamic-range-span">${displayRangeValue}</span>`;
 
                 const rangeSpan = document.getElementById('dynamic-range-span');
-                if (actualRangeKm < remainingTripKm) {
+                // MODIFICATION APPLIQUÉE : couleur basée sur la comparaison entre distance restante et autonomie
+                if (remainingTripKm > actualRangeKm) {
                     rangeSpan.style.color = "#ff3b30";
                 } else {
                     rangeSpan.style.color = "#34c759";
