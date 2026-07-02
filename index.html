@@ -66,13 +66,7 @@
             --search-border: rgba(0,0,0,0.1);
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            -webkit-user-select: none;
-            user-select: none;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-user-select: none; user-select: none; }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -81,339 +75,57 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
-            /* Padding inférieur augmenté à 35px pour l'iPhone 15 Pro */
             padding: calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 35px) 10px;
             overflow: hidden;
             transition: background-color 0.3s ease, color 0.3s ease;
         }
 
-        .top-dash {
-            display: grid;
-            grid-template-columns: 1fr 1.1fr 0.9fr;
-            gap: 10px;
-            height: 130px;
-            margin-bottom: 10px;
-        }
-
-        .speed-card {
-            background-color: var(--card-bg);
-            border-radius: 14px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-        }
-
-        .speed-value {
-            font-size: 3.5rem;
-            font-weight: 800;
-            line-height: 1;
-            color: var(--accent-color);
-            font-variant-numeric: tabular-nums;
-        }
-
-        .speed-unit {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            letter-spacing: 1px;
-        }
-
-        .stats-stack {
-            display: grid;
-            grid-template-rows: 1fr 1fr;
-            gap: 10px;
-        }
-
-        .mini-card {
-            background-color: var(--card-bg);
-            border-radius: 14px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            padding-left: 12px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-        }
-
-        .mini-label {
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .mini-value {
-            font-size: 1.25rem;
-            font-weight: 600;
-        }
-
-        #map-container {
-            flex: 1;
-            position: relative;
-            border-radius: 14px;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-
-        #map {
-            width: 100%;
-            height: 100%;
-            background-color: #e5e5ea;
-            z-index: 1;
-            transition: transform 0.2s ease-out;
-        }
-
-        .leaflet-layer {
-            filter: var(--map-invert);
-        }
-
-        .search-overlay-bar {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            z-index: 10;
-            display: flex;
-            flex-direction: column;
-            pointer-events: none;
-        }
-
-        .search-input-wrapper {
-            display: flex;
-            background: var(--search-bg);
-            border: 1px solid var(--search-border);
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            pointer-events: auto;
-            overflow: hidden;
-            height: 50px;
-            opacity: 0;
-            transform: translateY(-20px);
-            pointer-events: none;
-            transition: opacity 0.2s, transform 0.2s;
-        }
-
-        .search-input-wrapper.active {
-            opacity: 1;
-            transform: translateY(0);
-            pointer-events: auto;
-        }
-
-        .search-input-wrapper input {
-            flex: 1;
-            border: none;
-            background: transparent;
-            padding: 0 15px;
-            font-size: 1rem;
-            color: var(--text-color);
-            outline: none;
-            -webkit-user-select: text;
-            user-select: text;
-        }
-
-        .search-close-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            padding: 0 15px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .search-results-box {
-            background: var(--search-bg);
-            border-radius: 12px;
-            margin-top: 5px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-            max-height: 220px;
-            overflow-y: auto;
-            display: none;
-            pointer-events: auto;
-            border: 1px solid var(--search-border);
-        }
-
-        .search-results-box.active {
-            display: block;
-        }
-
-        .search-item {
-            padding: 14px 15px;
-            font-size: 0.95rem;
-            font-weight: 500;
-            color: var(--text-color);
-            border-bottom: 1px solid var(--search-border);
-            cursor: pointer;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .search-item:last-child {
-            border-bottom: none;
-        }
-
-        .search-item:active {
-            background-color: rgba(142, 142, 147, 0.2);
-        }
-
-        .controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-top: 10px;
-        }
-
-        .ble-panel {
-            margin-top: 10px;
-            display: flex;
-            gap: 8px;
-        }
-
-        .btn {
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 12px 5px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-align: center;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            cursor: pointer;
-        }
-
-        .btn-full {
-            flex: 1;
-            padding: 12px;
-        }
-
+        .top-dash { display: grid; grid-template-columns: 1fr 1.1fr 0.9fr; gap: 10px; height: 130px; margin-bottom: 10px; }
+        .speed-card { background-color: var(--card-bg); border-radius: 14px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .speed-value { font-size: 3.5rem; font-weight: 800; line-height: 1; color: var(--accent-color); font-variant-numeric: tabular-nums; }
+        .speed-unit { font-size: 0.85rem; color: var(--text-muted); letter-spacing: 1px; }
+        .stats-stack { display: grid; grid-template-rows: 1fr 1fr; gap: 10px; }
+        .mini-card { background-color: var(--card-bg); border-radius: 14px; display: flex; flex-direction: column; justify-content: center; padding-left: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .mini-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mini-value { font-size: 1.25rem; font-weight: 600; }
+        #map-container { flex: 1; position: relative; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        #map { width: 100%; height: 100%; background-color: #e5e5ea; z-index: 1; transition: transform 0.2s ease-out; }
+        .leaflet-layer { filter: var(--map-invert); }
+        .search-overlay-bar { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 10; display: flex; flex-direction: column; pointer-events: none; }
+        .search-input-wrapper { display: flex; background: var(--search-bg); border: 1px solid var(--search-border); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); pointer-events: auto; overflow: hidden; height: 50px; opacity: 0; transform: translateY(-20px); pointer-events: none; transition: opacity 0.2s, transform 0.2s; }
+        .search-input-wrapper.active { opacity: 1; transform: translateY(0); pointer-events: auto; }
+        .search-input-wrapper input { flex: 1; border: none; background: transparent; padding: 0 15px; font-size: 1rem; color: var(--text-color); outline: none; }
+        .search-close-btn { background: transparent; border: none; color: var(--text-muted); padding: 0 15px; font-size: 1.2rem; cursor: pointer; }
+        .search-results-box { background: var(--search-bg); border-radius: 12px; margin-top: 5px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); max-height: 220px; overflow-y: auto; display: none; pointer-events: auto; border: 1px solid var(--search-border); }
+        .search-results-box.active { display: block; }
+        .search-item { padding: 14px 15px; font-size: 0.95rem; font-weight: 500; color: var(--text-color); border-bottom: 1px solid var(--search-border); cursor: pointer; }
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+        .ble-panel { margin-top: 10px; display: flex; gap: 8px; }
+        .btn { color: white; border: none; border-radius: 10px; padding: 12px 5px; font-size: 0.85rem; font-weight: 600; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); cursor: pointer; }
+        .btn-full { flex: 1; padding: 12px; }
         .btn-gray { background-color: var(--card-bg); color: var(--text-color); border: 1px solid var(--text-muted); }
         .btn-blue { background-color: #007aff; }
         .btn-green { background-color: #34c759; }
         .btn-magenta { background-color: #ff007f; }
         .btn-orange { background-color: #ff9500; }
-
         #gpx-file { display: none; }
-
-        #overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--bg-color);
-            color: var(--text-color);
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            padding: 30px; text-align: center; z-index: 100;
-        }
-
-        #overlay button {
-            background: #007aff;
-            color: white; border: none;
-            padding: 15px 30px; border-radius: 30px; font-size: 1.2rem; font-weight: bold; margin-top: 20px;
-        }
-
-        .leaflet-control-zoom { display: none; }
-
-        .custom-arrow-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .arrow-marker {
-            width: 0;
-            height: 0;
-            border-left: 14px solid transparent;  
-            border-right: 14px solid transparent; 
-            border-bottom: 38px solid var(--arrow-color);
-            filter: drop-shadow(0px 4px 5px rgba(0,0,0,0.5)) drop-shadow(0px 0px 1px #fff); 
-            transition: transform 0.1s linear, border-bottom-color 0.3s;
-        }
-
-        .modal-shade {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.4);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-            z-index: 200;
-            display: flex;
-            justify-content: center;
-            align-items: flex-end;
-            opacity: 0; pointer-events: none;
-            transition: opacity 0.25s ease;
-        }
-
-        .modal-shade.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        .modal-box {
-            background: var(--modal-bg);
-            width: 100%;
-            max-width: 500px;
-            border-top-left-radius: 20px;
-            border-top-right-radius: 20px;
-            padding: 20px calc(env(safe-area-inset-left) + 20px) calc(env(safe-area-inset-bottom) + 20px) calc(env(safe-area-inset-right) + 20px);
-            box-shadow: 0 -5px 25px rgba(0,0,0,0.15);
-            transform: translateY(100%);
-            transition: transform 0.25s cubic-bezier(0.15, 1, 0.3, 1);
-        }
-
-        .modal-shade.active .modal-box {
-            transform: translateY(0);
-        }
-
-        .modal-title {
-            font-size: 1.1rem;
-            font-weight: 700;
-            text-align: center;
-            margin-bottom: 20px;
-            color: var(--text-color);
-            letter-spacing: 0.5px;
-        }
-
-        .modal-menu-stack {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .modal-btn {
-            background-color: var(--card-bg);
-            color: var(--text-color);
-            border: 1px solid rgba(142, 142, 147, 0.2);
-            border-radius: 12px;
-            padding: 16px;
-            font-size: 1rem;
-            font-weight: 600;
-            text-align: center;
-            transition: background-color 0.1s;
-        }
-
-        .modal-btn:active {
-            background-color: rgba(142, 142, 147, 0.2);
-        }
-
-        .modal-btn-danger {
-            color: #ff3b30;
-        }
-
-        .modal-btn-cancel {
-            margin-top: 10px;
-            background-color: transparent;
-            border: none;
-            color: var(--accent-color);
-            font-weight: 700;
-        }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); color: var(--text-color); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 30px; text-align: center; z-index: 100; }
+        #overlay button { background: #007aff; color: white; border: none; padding: 15px 30px; border-radius: 30px; font-size: 1.2rem; font-weight: bold; margin-top: 20px; }
+        .arrow-marker { width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent; border-bottom: 38px solid var(--arrow-color); filter: drop-shadow(0px 4px 5px rgba(0,0,0,0.5)); }
+        .modal-shade { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); z-index: 200; display: flex; justify-content: center; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
+        .modal-shade.active { opacity: 1; pointer-events: auto; }
+        .modal-box { background: var(--modal-bg); width: 100%; max-width: 500px; border-top-left-radius: 20px; border-top-right-radius: 20px; padding: 20px; box-shadow: 0 -5px 25px rgba(0,0,0,0.15); transform: translateY(100%); transition: transform 0.25s cubic-bezier(0.15, 1, 0.3, 1); }
+        .modal-shade.active .modal-box { transform: translateY(0); }
+        .modal-menu-stack { display: flex; flex-direction: column; gap: 10px; }
+        .modal-btn { background-color: var(--card-bg); color: var(--text-color); border: 1px solid rgba(142, 142, 147, 0.2); border-radius: 12px; padding: 16px; font-size: 1rem; font-weight: 600; text-align: center; }
+        .modal-btn-danger { color: #ff3b30; }
+        .modal-btn-cancel { margin-top: 10px; background-color: transparent; border: none; color: var(--accent-color); font-weight: 700; }
     </style>
 </head>
 <body>
 
     <div id="overlay">
         <h2>Moto Dash & GPX</h2>
-        <p style="margin-top: 15px; color: var(--text-muted);">L'accès GPS est nécessaire pour exploiter le compteur, le cap et la carte.</p>
         <button onclick="startApp()">Activer le GPS</button>
     </div>
 
@@ -434,7 +146,7 @@
         </div>
         <div class="stats-stack">
             <div class="mini-card">
-                <div class="mini-label">Arrivée (ETA)</div>
+                <div class="mini-label">Arrivée</div>
                 <div><span id="eta-time" class="mini-value">--:--</span></div>
             </div>
             <div class="mini-card">
@@ -447,12 +159,11 @@
     <div id="map-container">
         <div class="search-overlay-bar">
             <div id="search-wrapper" class="search-input-wrapper">
-                <input type="text" id="search-input" placeholder="Où va-t-on ? (Ex: Morlaix, Brest...)" oninput="handleSearchTyping()">
+                <input type="text" id="search-input" placeholder="Où va-t-on ?" oninput="handleSearchTyping()">
                 <button class="search-close-btn" onclick="hideSearchField()">✕</button>
             </div>
             <div id="search-results" class="search-results-box"></div>
         </div>
-        
         <div id="map"></div>
     </div>
 
@@ -467,14 +178,11 @@
         <button class="btn btn-blue" onclick="recenterMap()">🎯 Recentrer</button>
     </div>
 
-    <div id="reset-modal" class="modal-shade" onclick="closeModal(event)">
+    <div id="reset-modal" class="modal-shade" onclick="closeModal()">
         <div class="modal-box" onclick="event.stopPropagation()">
-            <div class="modal-title">OPTIONS DE L'APPLICATION</div>
             <div class="modal-menu-stack">
-                <button class="modal-btn" onclick="menuResetFull()">Remettre à zéro (Faire le Plein)</button>
-                <button class="modal-btn" onclick="menuSetBattery()">Saisir le % de batterie</button>
-                <button class="modal-btn modal-btn-danger" onclick="menuDeleteGpx()">Supprimer le tracé actuel</button>
-                <button id="theme-toggle-btn" class="modal-btn" onclick="menuToggleTheme()">Passer en Mode Nuit</button>
+                <button class="modal-btn" onclick="menuResetFull()">Remettre à zéro</button>
+                <button class="modal-btn" onclick="menuDeleteGpx()">Supprimer le tracé</button>
                 <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Fermer</button>
             </div>
         </div>
@@ -486,251 +194,65 @@
     <script>
         const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImY4MmQ4ZTYzNTYwYjQzNzM4NTEwZTU1YTBjNTlmNGQwIiwiaCI6Im11cm11cjY0In0=";
         const AUTONOMIE_MAX = 170;
-        let totalDistance = 0; 
-        let currentRange = AUTONOMIE_MAX; 
-        let lastPosition = null;
-        let watchId = null;
-        let map = null;
-        let marker = null;
-        let gpxLayer = null; 
-        let gpxPoints = []; 
-        let tempDestinationMarker = null;
-        let autoCenter = true;
-        let autoCenterTimeout = null;
-        let currentHeading = 0;
-        let targetDestinationName = null;
-        let targetCoords = null; 
-        let isCalculatingRoute = false;
-        let remainingDurationSeconds = 0; 
-        let lastRouteCalculationTime = 0;  
-        let autocompleteTimeout = null;
-        let pressTimer = null;
-        let isConnectedBLE = false;
-        const REZON_SERVICE_UUID = '0000e0ff-3c17-d293-8e48-14fe2e4da212';
-        const REZON_CHAR_UUID    = '0000e101-3c17-d293-8e48-14fe2e4da212'; 
-
-        if (localStorage.getItem('moto_theme')) document.documentElement.className = localStorage.getItem('moto_theme');
-        if (localStorage.getItem('moto_distance')) totalDistance = parseFloat(localStorage.getItem('moto_distance'));
-        if (localStorage.getItem('moto_current_range')) currentRange = parseFloat(localStorage.getItem('moto_current_range'));
-        if (localStorage.getItem('moto_target_name') && localStorage.getItem('moto_target_coords')) {
-            targetDestinationName = localStorage.getItem('moto_target_name');
-            targetCoords = JSON.parse(localStorage.getItem('moto_target_coords'));
-        }
-        updateUI(0, totalDistance);
-
-        function initMap() {
-            map = L.map('map', { zoomControl: false, inertia: false }).setView([46.2276, 2.2137], 13);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
-            const arrowIcon = L.divIcon({ className: 'custom-arrow-container', html: '<div id="moto-arrow" class="arrow-marker"></div>', iconSize: [28, 38], iconAnchor: [14, 24] });
-            marker = L.marker([0, 0], { icon: arrowIcon }).addTo(map);
-            map.on('dragstart zoomstart', () => { autoCenter = false; clearTimeout(autoCenterTimeout); rotateMap(0); autoCenterTimeout = setTimeout(() => { autoCenter = true; }, 6000); });
-            map.on('mousedown touchstart', (e) => { clearTimeout(pressTimer); pressTimer = setTimeout(() => { handleLongPress(e.latlng); }, 1000); });
-            map.on('mouseup mousemove touchend touchmove contextmenu', () => { clearTimeout(pressTimer); });
-            if (localStorage.getItem('moto_gpx_data')) parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
-        }
-
-        function handleLongPress(latlng) {
-            if (targetDestinationName && !confirm(`Arrêter le guidage vers ${targetDestinationName} ?`)) return;
-            if (tempDestinationMarker) map.removeLayer(tempDestinationMarker);
-            tempDestinationMarker = L.marker(latlng).addTo(map);
-            setTimeout(() => {
-                if (confirm("Définir ce point comme destination ?")) {
-                    targetDestinationName = "Point carte";
-                    targetCoords = { lat: latlng.lat, lon: latlng.lng };
-                    localStorage.setItem('moto_target_name', targetDestinationName);
-                    localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
-                    executeSilentRecalculate(lastPosition ? lastPosition.coords.latitude : latlng.lat, lastPosition ? lastPosition.coords.longitude : latlng.lng, true);
-                    if (tempDestinationMarker) { map.removeLayer(tempDestinationMarker); tempDestinationMarker = null; }
-                } else if (tempDestinationMarker) { map.removeLayer(tempDestinationMarker); tempDestinationMarker = null; }
-            }, 50);
-        }
+        let totalDistance = parseFloat(localStorage.getItem('moto_distance') || 0);
+        let currentRange = parseFloat(localStorage.getItem('moto_current_range') || AUTONOMIE_MAX);
+        let lastPosition = null, map = null, marker = null, gpxLayer = null, gpxPoints = [], targetDestinationName = null, targetCoords = null, isCalculatingRoute = false, remainingDurationSeconds = 0;
 
         function startApp() {
             if ("geolocation" in navigator) {
                 document.getElementById('overlay').style.display = 'none';
-                initMap();
-                watchId = navigator.geolocation.watchPosition(updatePosition, handleError, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
-                if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(() => {});
+                map = L.map('map', { zoomControl: false }).setView([46.2276, 2.2137], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                const arrowIcon = L.divIcon({ className: 'custom-arrow-container', html: '<div id="moto-arrow" class="arrow-marker"></div>', iconSize: [28, 38] });
+                marker = L.marker([0, 0], { icon: arrowIcon }).addTo(map);
+                navigator.geolocation.watchPosition(updatePosition, (e) => console.log(e), { enableHighAccuracy: true });
+                if(localStorage.getItem('moto_gpx_data')) parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
             }
         }
 
-        function rotateMap(heading) {
-            const mapEl = document.getElementById('map');
-            const arrowEl = document.getElementById('moto-arrow');
-            if (autoCenter && heading !== null) {
-                mapEl.style.transform = `rotate(${-heading}deg)`;
-                if (arrowEl) arrowEl.style.transform = `rotate(${heading}deg)`;
-            } else {
-                mapEl.style.transform = `rotate(0deg)`;
-                if (arrowEl) arrowEl.style.transform = `rotate(${currentHeading}deg)`;
-            }
-        }
-
-        function updatePosition(position) {
-            let lat = position.coords.latitude, lon = position.coords.longitude;
-            let speedKmh = (position.coords.speed !== null && position.coords.speed > 0) ? Math.round(position.coords.speed * 3.6) : 0;
-            if (position.coords.heading !== null && speedKmh > 5) currentHeading = position.coords.heading;
-            if (map) {
-                marker.setLatLng([lat, lon]);
-                if (autoCenter) { map.setView([lat, lon], 16); rotateMap(currentHeading); }
-                if (gpxPoints.length > 0) checkRouteDeviationAndClean(lat, lon);
-            }
-            let dist = lastPosition ? calculateDistance(lastPosition.coords.latitude, lastPosition.coords.longitude, lat, lon) : 0;
-            if (speedKmh > 2 || dist > 0.005) {
-                totalDistance += dist;
-                if (!isConnectedBLE) {
-                    let penalty = (speedKmh < 40) ? 0.8 : (speedKmh < 80 ? 1.0 : (speedKmh < 95 ? 1.25 : 1.85));
-                    currentRange = Math.max(0, currentRange - (dist * penalty));
-                }
-                localStorage.setItem('moto_distance', totalDistance);
-                localStorage.setItem('moto_current_range', currentRange);
-            }
-            lastPosition = position;
+        function updatePosition(pos) {
+            lastPosition = pos;
+            let lat = pos.coords.latitude, lon = pos.coords.longitude;
+            marker.setLatLng([lat, lon]);
+            map.setView([lat, lon], 16);
+            let speedKmh = Math.round((pos.coords.speed || 0) * 3.6);
             updateUI(speedKmh, totalDistance);
-        }
-
-        function getRemainingTrajectoryDistance() {
-            if (!gpxPoints || gpxPoints.length < 2) return 0;
-            let routeDist = 0;
-            for (let i = 0; i < gpxPoints.length - 1; i++) routeDist += calculateDistance(gpxPoints[i][0], gpxPoints[i][1], gpxPoints[i+1][0], gpxPoints[i+1][1]);
-            return routeDist;
-        }
-
-        function checkRouteDeviationAndClean(currentLat, currentLon) {
-            let minDistance = Math.min(...gpxPoints.map(p => calculateDistance(currentLat, currentLon, p[0], p[1])));
-            if (targetCoords && minDistance > 0.150 && !isCalculatingRoute) executeSilentRecalculate(currentLat, currentLon);
-            else if (minDistance < 0.150) {
-                let closestIndex = gpxPoints.findIndex(p => calculateDistance(currentLat, currentLon, p[0], p[1]) === minDistance);
-                if (closestIndex > 0) {
-                    gpxPoints.splice(0, closestIndex);
-                    localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
-                    drawGpxPolyline(false);
-                }
-            }
-        }
-
-        function handleRouteBtnClick() {
-            if (!lastPosition) { alert("Signal GPS manquant."); return; }
-            if (targetDestinationName) { if (confirm(`Arrêter le guidage vers ${targetDestinationName} ?`)) menuDeleteGpx(); }
-            else showSearchField();
-        }
-
-        function showSearchField() { const w = document.getElementById('search-wrapper'); w.classList.add('active'); document.getElementById('search-input').focus(); }
-        function hideSearchField() { document.getElementById('search-wrapper').classList.remove('active'); document.getElementById('search-results').classList.remove('active'); }
-
-        function handleSearchTyping() {
-            clearTimeout(autocompleteTimeout);
-            const query = document.getElementById('search-input').value.trim();
-            if (query.length < 3) return;
-            autocompleteTimeout = setTimeout(async () => {
-                let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=fr`;
-                let data = await (await fetch(url)).json();
-                const res = document.getElementById('search-results');
-                res.innerHTML = "";
-                if (data.length > 0) {
-                    res.classList.add('active');
-                    data.forEach(item => {
-                        let div = document.createElement('div'); div.className = 'search-item'; div.innerText = item.display_name.split(',')[0];
-                        div.onclick = () => { selectDestination(item, item.display_name); };
-                        res.appendChild(div);
-                    });
-                }
-            }, 350);
-        }
-
-        function selectDestination(item, name) {
-            hideSearchField();
-            targetDestinationName = name.split(',')[0];
-            targetCoords = { lat: parseFloat(item.lat), lon: parseFloat(item.lon) };
-            localStorage.setItem('moto_target_name', targetDestinationName);
-            localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
-            executeSilentRecalculate(lastPosition.coords.latitude, lastPosition.coords.longitude, true);
-        }
-
-        async function executeSilentRecalculate(lat, lon, fit = false) {
-            isCalculatingRoute = true;
-            try {
-                let body = { coordinates: [[lon, lat], [targetCoords.lon, targetCoords.lat]], preference: "recommended" };
-                let res = await fetch(`https://api.openrouteservice.org/v2/directions/driving-car/geojson`, {
-                    method: 'POST', headers: { 'Authorization': ORS_API_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-                });
-                let data = await res.json();
-                gpxPoints = data.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
-                remainingDurationSeconds = data.features[0].properties.summary.duration;
-                localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
-                drawGpxPolyline(fit);
-            } catch (e) { console.error(e); } finally { isCalculatingRoute = false; }
-        }
-
-        async function connectBluetoothMotos() {
-            try {
-                const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [REZON_SERVICE_UUID] });
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService(REZON_SERVICE_UUID);
-                const char = await service.getCharacteristic(REZON_CHAR_UUID);
-                await char.startNotifications();
-                isConnectedBLE = true;
-                char.addEventListener('characteristicvaluechanged', (e) => { currentRange = e.target.value.getUint8(0); updateUI(0, totalDistance); });
-            } catch (e) { alert("Erreur BLE: " + e.message); }
-        }
-
-        function triggerGpxUpload() { document.getElementById('gpx-file').click(); }
-        function handleGpxFile(e) {
-            const reader = new FileReader();
-            reader.onload = (ev) => { localStorage.setItem('moto_gpx_data', ev.target.result); parseAndDrawGpx(ev.target.result, true); };
-            reader.readAsText(e.target.files[0]);
-        }
-
-        function parseAndDrawGpx(data, fit) {
-            if (data.startsWith('[')) gpxPoints = JSON.parse(data);
-            else {
-                const doc = new DOMParser().parseFromString(data, "text/xml");
-                gpxPoints = Array.from(doc.getElementsByTagName("trkpt")).map(p => [parseFloat(p.getAttribute("lat")), parseFloat(p.getAttribute("lon"))]);
-            }
-            drawGpxPolyline(fit);
-        }
-
-        function drawGpxPolyline(fit) {
-            if (gpxLayer) map.removeLayer(gpxLayer);
-            if (gpxPoints.length > 0) {
-                gpxLayer = L.polyline(gpxPoints, {color: getComputedStyle(document.documentElement).getPropertyValue('--gpx-color'), weight: 7}).addTo(map);
-                if (fit) map.fitBounds(gpxLayer.getBounds());
-            }
-        }
-
-        function recenterMap() { autoCenter = true; map.setView([lastPosition.coords.latitude, lastPosition.coords.longitude], 16); }
-
-        function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371;
-            let dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
-            let a = Math.sin(dLat/2)**2 + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
         function updateUI(speed, dist) {
             document.getElementById('speed').innerText = speed;
             document.getElementById('distance').innerText = dist.toFixed(1);
-            
-            // Logique de couleur : Si trajet > autonomie, on colore le label du trajet en rouge
-            let actualRangeKm = isConnectedBLE ? (currentRange / 100) * AUTONOMIE_MAX : currentRange;
+            let actualRangeKm = currentRange;
             let remainingTripKm = Math.round(getRemainingTrajectoryDistance());
             const rangeLabelEl = document.getElementById('range-label');
-            
-            if (gpxPoints.length > 0 && actualRangeKm < remainingTripKm) {
-                rangeLabelEl.style.color = "#ff3b30";
-            } else {
-                rangeLabelEl.style.color = "var(--text-muted)";
-            }
-
-            // ... (reste de la logique UI inchangée)
-            const rangeValueEl = document.getElementById('range');
-            rangeValueEl.innerText = Math.round(currentRange);
+            rangeLabelEl.style.color = (gpxPoints.length > 0 && actualRangeKm < remainingTripKm) ? "#ff3b30" : "var(--text-muted)";
+            document.getElementById('range').innerText = Math.round(currentRange);
         }
 
+        function getRemainingTrajectoryDistance() {
+            let routeDist = 0;
+            for (let i = 0; i < gpxPoints.length - 1; i++) {
+                let p1 = gpxPoints[i], p2 = gpxPoints[i+1];
+                routeDist += 6371 * Math.acos(Math.sin(p1[0]*Math.PI/180)*Math.sin(p2[0]*Math.PI/180) + Math.cos(p1[0]*Math.PI/180)*Math.cos(p2[0]*Math.PI/180)*Math.cos((p2[1]-p1[1])*Math.PI/180));
+            }
+            return routeDist;
+        }
+
+        function handleRouteBtnClick() { if (targetDestinationName) menuDeleteGpx(); else document.getElementById('search-wrapper').classList.add('active'); }
         function openModal() { document.getElementById('reset-modal').classList.add('active'); }
         function closeModal() { document.getElementById('reset-modal').classList.remove('active'); }
-        function menuDeleteGpx() { closeModal(); gpxPoints = []; if(gpxLayer) map.removeLayer(gpxLayer); localStorage.removeItem('moto_gpx_data'); updateUI(0, totalDistance); }
+        function menuResetFull() { currentRange = AUTONOMIE_MAX; totalDistance = 0; localStorage.setItem('moto_distance', 0); closeModal(); }
+        function menuDeleteGpx() { gpxPoints = []; if(gpxLayer) map.removeLayer(gpxLayer); targetDestinationName = null; closeModal(); updateUI(0, totalDistance); }
+        function recenterMap() { if(lastPosition) map.setView([lastPosition.coords.latitude, lastPosition.coords.longitude], 16); }
+        function triggerGpxUpload() { document.getElementById('gpx-file').click(); }
+        function handleGpxFile(e) { const reader = new FileReader(); reader.onload = (ev) => { localStorage.setItem('moto_gpx_data', ev.target.result); parseAndDrawGpx(ev.target.result, true); }; reader.readAsText(e.target.files[0]); }
+        function parseAndDrawGpx(data, fit) { 
+            const doc = new DOMParser().parseFromString(data, "text/xml");
+            gpxPoints = Array.from(doc.getElementsByTagName("trkpt")).map(p => [parseFloat(p.getAttribute("lat")), parseFloat(p.getAttribute("lon"))]);
+            if(gpxLayer) map.removeLayer(gpxLayer);
+            gpxLayer = L.polyline(gpxPoints, {color: '#0055ff', weight: 7}).addTo(map);
+            if(fit) map.fitBounds(gpxLayer.getBounds());
+        }
     </script>
 </body>
 </html>
-```[cite: 1]
