@@ -3,36 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Moto Dash & GPX</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        :root { --bg-color: #f2f2f7; --card-bg: #ffffff; --accent-color: #007aff; --text-color: #000000; --text-muted: #8e8e93; --modal-bg: rgba(255, 255, 255, 0.95); --search-bg: #ffffff; --search-border: rgba(0,0,0,0.1); }
-        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-user-select: none; user-select: none; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); color: var(--text-color); height: 100vh; display: flex; flex-direction: column; padding: calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 35px) 10px; overflow: hidden; }
+        :root { --bg-color: #f2f2f7; --card-bg: #ffffff; --accent-color: #007aff; --text-color: #000000; --text-muted: #8e8e93; --search-bg: #ffffff; }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-user-select: none; }
+        body { font-family: -apple-system, sans-serif; background-color: var(--bg-color); height: 100vh; display: flex; flex-direction: column; padding: 10px; overflow: hidden; }
         .top-dash { display: grid; grid-template-columns: 1fr 1.1fr 0.9fr; gap: 10px; height: 130px; margin-bottom: 10px; }
-        .speed-card { background-color: var(--card-bg); border-radius: 14px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .speed-card { background-color: var(--card-bg); border-radius: 14px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
         .speed-value { font-size: 3.5rem; font-weight: 800; color: var(--accent-color); }
         .stats-stack { display: grid; grid-template-rows: 1fr 1fr; gap: 10px; }
         .mini-card { background-color: var(--card-bg); border-radius: 14px; padding-left: 12px; display: flex; flex-direction: column; justify-content: center; }
         .mini-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; }
         .mini-value { font-size: 1.25rem; font-weight: 600; }
         #map-container { flex: 1; position: relative; border-radius: 14px; overflow: hidden; }
-        #map { width: 100%; height: 100%; background-color: #e5e5ea; }
-        .search-overlay-bar { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 10; display: flex; flex-direction: column; pointer-events: none; }
-        .search-input-wrapper { display: flex; background: var(--search-bg); border-radius: 12px; height: 50px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
-        .search-input-wrapper.active { opacity: 1; pointer-events: auto; }
+        #map { width: 100%; height: 100%; }
+        .search-overlay-bar { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 10; }
+        .search-input-wrapper { display: none; background: var(--search-bg); border-radius: 12px; height: 50px; display: flex; }
+        .search-input-wrapper.active { display: flex; }
         .search-input-wrapper input { flex: 1; border: none; padding: 0 15px; background: transparent; }
-        .search-results-box { background: var(--search-bg); border-radius: 12px; margin-top: 5px; display: none; pointer-events: auto; max-height: 200px; overflow-y: auto; }
+        .search-results-box { background: var(--search-bg); border-radius: 12px; margin-top: 5px; display: none; max-height: 200px; overflow-y: auto; }
         .search-results-box.active { display: block; }
-        .search-item { padding: 14px 15px; border-bottom: 1px solid var(--search-border); cursor: pointer; }
+        .search-item { padding: 14px 15px; border-bottom: 1px solid #eee; cursor: pointer; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
         .btn { color: white; border: none; border-radius: 10px; padding: 12px; font-weight: 600; cursor: pointer; }
         #overlay { position: fixed; inset: 0; background: var(--bg-color); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
-        .modal-shade { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; justify-content: center; align-items: flex-end; z-index: 200; }
-        .modal-shade.active { display: flex; }
-        .modal-box { background: var(--modal-bg); width: 100%; max-width: 500px; padding: 20px; border-radius: 20px 20px 0 0; }
     </style>
 </head>
 <body>
@@ -87,26 +82,21 @@
         <button class="btn" style="background:#007aff" onclick="recenterMap()">🎯 Recentrer</button>
     </div>
 
-    <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
+    <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)" style="display:none">
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        let map, marker, gpxLayer, gpxPoints = [], totalDistance = parseFloat(localStorage.getItem('moto_distance') || 0), currentRange = 170, lastPosition = null;
-        let autocompleteTimeout;
+        let map, marker, autocompleteTimeout;
 
         function startApp() {
             document.getElementById('overlay').style.display = 'none';
             map = L.map('map', { zoomControl: false }).setView([48.57, -3.83], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
             marker = L.marker([0, 0]).addTo(map);
-            navigator.geolocation.watchPosition(updatePosition, () => {}, { enableHighAccuracy: true });
-        }
-
-        function updatePosition(pos) {
-            lastPosition = pos;
-            marker.setLatLng([pos.coords.latitude, pos.coords.longitude]);
-            map.setView([pos.coords.latitude, pos.coords.longitude], 16);
-            updateUI(Math.round(pos.coords.speed * 3.6 || 0), totalDistance);
+            navigator.geolocation.watchPosition((pos) => {
+                marker.setLatLng([pos.coords.latitude, pos.coords.longitude]);
+                map.setView([pos.coords.latitude, pos.coords.longitude], 16);
+            }, () => {}, { enableHighAccuracy: true });
         }
 
         function handleSearchTyping() {
@@ -121,32 +111,20 @@
                 if (data.length > 0) {
                     box.classList.add('active');
                     data.forEach(item => {
-                        let div = document.createElement('div'); div.className = 'search-item'; div.innerText = item.display_name.split(',')[0];
-                        div.onclick = () => { selectDestination(item); };
+                        let div = document.createElement('div');
+                        div.className = 'search-item';
+                        div.innerText = item.display_name.split(',')[0];
+                        div.onclick = () => { box.classList.remove('active'); document.getElementById('search-wrapper').classList.remove('active'); };
                         box.appendChild(div);
                     });
                 }
             }, 350);
         }
 
-        function selectDestination(item) {
-            document.getElementById('search-wrapper').classList.remove('active');
-            document.getElementById('search-results').classList.remove('active');
-            // Logique de calcul d'itinéraire ici...
-        }
-
-        function updateUI(speed, dist) {
-            document.getElementById('speed').innerText = speed;
-            document.getElementById('distance').innerText = dist.toFixed(1);
-            let remainingTrip = 50; // Exemple calculé
-            document.getElementById('range-label').style.color = (currentRange < remainingTrip) ? "#ff3b30" : "var(--text-muted)";
-        }
-
         function handleRouteBtnClick() { document.getElementById('search-wrapper').classList.add('active'); }
         function hideSearchField() { document.getElementById('search-wrapper').classList.remove('active'); document.getElementById('search-results').classList.remove('active'); }
         function triggerGpxUpload() { document.getElementById('gpx-file').click(); }
-        function recenterMap() { if(lastPosition) map.setView([lastPosition.coords.latitude, lastPosition.coords.longitude], 16); }
+        function recenterMap() { /* Logique de recentrage */ }
     </script>
 </body>
 </html>
-```[cite: 1]
