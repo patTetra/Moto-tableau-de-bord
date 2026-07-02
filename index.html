@@ -8,118 +8,31 @@
     <title>Moto Dash & GPX</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        :root {
-            --bg-color: #f2f2f7;
-            --card-bg: #ffffff;
-            --accent-color: #007aff;
-            --text-color: #000000;
-            --text-muted: #8e8e93;
-            --map-invert: invert(0%) hue-rotate(0deg);
-            --arrow-color: #ff3b30; 
-            --gpx-color: #0055ff;   
-            --modal-bg: rgba(255, 255, 255, 0.95);
-            --search-bg: #ffffff;
-            --search-border: rgba(0,0,0,0.1);
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root:not(.force-light) {
-                --bg-color: #0a0a0a;
-                --card-bg: #16161a;
-                --accent-color: #00ff66; 
-                --text-color: #ffffff;
-                --text-muted: #8e8e93;
-                --map-invert: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
-                --arrow-color: #00ff66; 
-                --gpx-color: #00ccff;
-                --modal-bg: rgba(22, 22, 26, 0.95);
-                --search-bg: #1c1c1e;
-                --search-border: rgba(255,255,255,0.1);
-            }
-        }
-
-        :root.force-dark {
-            --bg-color: #0a0a0a;
-            --card-bg: #16161a;
-            --accent-color: #00ff66;
-            --text-color: #ffffff;
-            --text-muted: #8e8e93;
-            --map-invert: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
-            --arrow-color: #00ff66;
-            --gpx-color: #00ccff;
-            --modal-bg: rgba(22, 22, 26, 0.95);
-            --search-bg: #1c1c1e;
-            --search-border: rgba(255,255,255,0.1);
-        }
-
-        :root.force-light {
-            --bg-color: #f2f2f7;
-            --card-bg: #ffffff;
-            --accent-color: #007aff;
-            --text-color: #000000;
-            --text-muted: #8e8e93;
-            --map-invert: invert(0%) hue-rotate(0deg);
-            --arrow-color: #ff3b30; 
-            --gpx-color: #0055ff;   
-            --modal-bg: rgba(255, 255, 255, 0.95);
-            --search-bg: #ffffff;
-            --search-border: rgba(0,0,0,0.1);
-        }
-
+        :root { --bg-color: #f2f2f7; --card-bg: #ffffff; --accent-color: #007aff; --text-color: #000000; --text-muted: #8e8e93; --modal-bg: rgba(255, 255, 255, 0.95); --search-bg: #ffffff; --search-border: rgba(0,0,0,0.1); }
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-user-select: none; user-select: none; }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            padding: calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 35px) 10px;
-            overflow: hidden;
-            transition: background-color 0.3s ease, color 0.3s ease;
-        }
-
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); color: var(--text-color); height: 100vh; display: flex; flex-direction: column; padding: calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 35px) 10px; overflow: hidden; }
         .top-dash { display: grid; grid-template-columns: 1fr 1.1fr 0.9fr; gap: 10px; height: 130px; margin-bottom: 10px; }
         .speed-card { background-color: var(--card-bg); border-radius: 14px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .speed-value { font-size: 3.5rem; font-weight: 800; line-height: 1; color: var(--accent-color); font-variant-numeric: tabular-nums; }
-        .speed-unit { font-size: 0.85rem; color: var(--text-muted); letter-spacing: 1px; }
+        .speed-value { font-size: 3.5rem; font-weight: 800; color: var(--accent-color); }
         .stats-stack { display: grid; grid-template-rows: 1fr 1fr; gap: 10px; }
-        .mini-card { background-color: var(--card-bg); border-radius: 14px; display: flex; flex-direction: column; justify-content: center; padding-left: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .mini-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mini-card { background-color: var(--card-bg); border-radius: 14px; padding-left: 12px; display: flex; flex-direction: column; justify-content: center; }
+        .mini-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; }
         .mini-value { font-size: 1.25rem; font-weight: 600; }
-        #map-container { flex: 1; position: relative; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        #map { width: 100%; height: 100%; background-color: #e5e5ea; z-index: 1; transition: transform 0.2s ease-out; }
-        .leaflet-layer { filter: var(--map-invert); }
+        #map-container { flex: 1; position: relative; border-radius: 14px; overflow: hidden; }
+        #map { width: 100%; height: 100%; background-color: #e5e5ea; }
         .search-overlay-bar { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 10; display: flex; flex-direction: column; pointer-events: none; }
-        .search-input-wrapper { display: flex; background: var(--search-bg); border: 1px solid var(--search-border); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); pointer-events: auto; overflow: hidden; height: 50px; opacity: 0; transform: translateY(-20px); pointer-events: none; transition: opacity 0.2s, transform 0.2s; }
-        .search-input-wrapper.active { opacity: 1; transform: translateY(0); pointer-events: auto; }
-        .search-input-wrapper input { flex: 1; border: none; background: transparent; padding: 0 15px; font-size: 1rem; color: var(--text-color); outline: none; }
-        .search-close-btn { background: transparent; border: none; color: var(--text-muted); padding: 0 15px; font-size: 1.2rem; cursor: pointer; }
-        .search-results-box { background: var(--search-bg); border-radius: 12px; margin-top: 5px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); max-height: 220px; overflow-y: auto; display: none; pointer-events: auto; border: 1px solid var(--search-border); }
+        .search-input-wrapper { display: flex; background: var(--search-bg); border-radius: 12px; height: 50px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+        .search-input-wrapper.active { opacity: 1; pointer-events: auto; }
+        .search-input-wrapper input { flex: 1; border: none; padding: 0 15px; background: transparent; }
+        .search-results-box { background: var(--search-bg); border-radius: 12px; margin-top: 5px; display: none; pointer-events: auto; max-height: 200px; overflow-y: auto; }
         .search-results-box.active { display: block; }
-        .search-item { padding: 14px 15px; font-size: 0.95rem; font-weight: 500; color: var(--text-color); border-bottom: 1px solid var(--search-border); cursor: pointer; }
+        .search-item { padding: 14px 15px; border-bottom: 1px solid var(--search-border); cursor: pointer; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-        .ble-panel { margin-top: 10px; display: flex; gap: 8px; }
-        .btn { color: white; border: none; border-radius: 10px; padding: 12px 5px; font-size: 0.85rem; font-weight: 600; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); cursor: pointer; }
-        .btn-full { flex: 1; padding: 12px; }
-        .btn-gray { background-color: var(--card-bg); color: var(--text-color); border: 1px solid var(--text-muted); }
-        .btn-blue { background-color: #007aff; }
-        .btn-green { background-color: #34c759; }
-        .btn-magenta { background-color: #ff007f; }
-        .btn-orange { background-color: #ff9500; }
-        #gpx-file { display: none; }
-        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); color: var(--text-color); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 30px; text-align: center; z-index: 100; }
-        #overlay button { background: #007aff; color: white; border: none; padding: 15px 30px; border-radius: 30px; font-size: 1.2rem; font-weight: bold; margin-top: 20px; }
-        .arrow-marker { width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent; border-bottom: 38px solid var(--arrow-color); filter: drop-shadow(0px 4px 5px rgba(0,0,0,0.5)); }
-        .modal-shade { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); z-index: 200; display: flex; justify-content: center; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
-        .modal-shade.active { opacity: 1; pointer-events: auto; }
-        .modal-box { background: var(--modal-bg); width: 100%; max-width: 500px; border-top-left-radius: 20px; border-top-right-radius: 20px; padding: 20px; box-shadow: 0 -5px 25px rgba(0,0,0,0.15); transform: translateY(100%); transition: transform 0.25s cubic-bezier(0.15, 1, 0.3, 1); }
-        .modal-shade.active .modal-box { transform: translateY(0); }
-        .modal-menu-stack { display: flex; flex-direction: column; gap: 10px; }
-        .modal-btn { background-color: var(--card-bg); color: var(--text-color); border: 1px solid rgba(142, 142, 147, 0.2); border-radius: 12px; padding: 16px; font-size: 1rem; font-weight: 600; text-align: center; }
-        .modal-btn-danger { color: #ff3b30; }
-        .modal-btn-cancel { margin-top: 10px; background-color: transparent; border: none; color: var(--accent-color); font-weight: 700; }
+        .btn { color: white; border: none; border-radius: 10px; padding: 12px; font-weight: 600; cursor: pointer; }
+        #overlay { position: fixed; inset: 0; background: var(--bg-color); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
+        .modal-shade { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; justify-content: center; align-items: flex-end; z-index: 200; }
+        .modal-shade.active { display: flex; }
+        .modal-box { background: var(--modal-bg); width: 100%; max-width: 500px; padding: 20px; border-radius: 20px 20px 0 0; }
     </style>
 </head>
 <body>
@@ -137,21 +50,21 @@
         <div class="stats-stack">
             <div class="mini-card">
                 <div class="mini-label">Parcouru</div>
-                <div><span id="distance" class="mini-value">0.0</span> <span style="font-size:0.75rem; color:var(--text-muted);">km</span></div>
+                <div><span id="distance" class="mini-value">0.0</span> km</div>
             </div>
             <div class="mini-card">
                 <div id="range-label" class="mini-label">Autonomie</div>
-                <div><span id="range" class="mini-value">170</span> <span id="unit-label" style="font-size:0.75rem; color:var(--text-muted);">km restants</span></div>
+                <div><span id="range" class="mini-value">170</span> km restants</div>
             </div>
         </div>
         <div class="stats-stack">
             <div class="mini-card">
                 <div class="mini-label">Arrivée</div>
-                <div><span id="eta-time" class="mini-value">--:--</span></div>
+                <div id="eta-time" class="mini-value">--:--</div>
             </div>
             <div class="mini-card">
                 <div class="mini-label">Restant</div>
-                <div><span id="eta-duration" class="mini-value">--</span></div>
+                <div id="eta-duration" class="mini-value">--</div>
             </div>
         </div>
     </div>
@@ -160,99 +73,80 @@
         <div class="search-overlay-bar">
             <div id="search-wrapper" class="search-input-wrapper">
                 <input type="text" id="search-input" placeholder="Où va-t-on ?" oninput="handleSearchTyping()">
-                <button class="search-close-btn" onclick="hideSearchField()">✕</button>
+                <button onclick="hideSearchField()">✕</button>
             </div>
             <div id="search-results" class="search-results-box"></div>
         </div>
         <div id="map"></div>
     </div>
 
-    <div class="ble-panel">
-        <button id="ble-btn" class="btn btn-magenta btn-full" onclick="connectBluetoothMotos()">🔌 Connecter la Rezon Bohemia</button>
-    </div>
-
     <div class="controls">
-        <button class="btn btn-green" onclick="triggerGpxUpload()">📁 Charger GPX</button>
-        <button id="route-btn" class="btn btn-orange" onclick="handleRouteBtnClick()">🔍 Trajet Direct</button>
-        <button class="btn btn-gray" onclick="openModal()">⚙️ Options</button>
-        <button class="btn btn-blue" onclick="recenterMap()">🎯 Recentrer</button>
-    </div>
-
-    <div id="reset-modal" class="modal-shade" onclick="closeModal()">
-        <div class="modal-box" onclick="event.stopPropagation()">
-            <div class="modal-menu-stack">
-                <button class="modal-btn" onclick="menuResetFull()">Remettre à zéro</button>
-                <button class="modal-btn" onclick="menuDeleteGpx()">Supprimer le tracé</button>
-                <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Fermer</button>
-            </div>
-        </div>
+        <button class="btn" style="background:#34c759" onclick="triggerGpxUpload()">📁 Charger GPX</button>
+        <button id="route-btn" class="btn" style="background:#ff9500" onclick="handleRouteBtnClick()">🔍 Trajet Direct</button>
+        <button class="btn" style="background:#8e8e93" onclick="openModal()">⚙️ Options</button>
+        <button class="btn" style="background:#007aff" onclick="recenterMap()">🎯 Recentrer</button>
     </div>
 
     <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImY4MmQ4ZTYzNTYwYjQzNzM4NTEwZTU1YTBjNTlmNGQwIiwiaCI6Im11cm11cjY0In0=";
-        const AUTONOMIE_MAX = 170;
-        let totalDistance = parseFloat(localStorage.getItem('moto_distance') || 0);
-        let currentRange = parseFloat(localStorage.getItem('moto_current_range') || AUTONOMIE_MAX);
-        let lastPosition = null, map = null, marker = null, gpxLayer = null, gpxPoints = [], targetDestinationName = null, targetCoords = null, isCalculatingRoute = false, remainingDurationSeconds = 0;
+        let map, marker, gpxLayer, gpxPoints = [], totalDistance = parseFloat(localStorage.getItem('moto_distance') || 0), currentRange = 170, lastPosition = null;
+        let autocompleteTimeout;
 
         function startApp() {
-            if ("geolocation" in navigator) {
-                document.getElementById('overlay').style.display = 'none';
-                map = L.map('map', { zoomControl: false }).setView([46.2276, 2.2137], 13);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-                const arrowIcon = L.divIcon({ className: 'custom-arrow-container', html: '<div id="moto-arrow" class="arrow-marker"></div>', iconSize: [28, 38] });
-                marker = L.marker([0, 0], { icon: arrowIcon }).addTo(map);
-                navigator.geolocation.watchPosition(updatePosition, (e) => console.log(e), { enableHighAccuracy: true });
-                if(localStorage.getItem('moto_gpx_data')) parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
-            }
+            document.getElementById('overlay').style.display = 'none';
+            map = L.map('map', { zoomControl: false }).setView([48.57, -3.83], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            marker = L.marker([0, 0]).addTo(map);
+            navigator.geolocation.watchPosition(updatePosition, () => {}, { enableHighAccuracy: true });
         }
 
         function updatePosition(pos) {
             lastPosition = pos;
-            let lat = pos.coords.latitude, lon = pos.coords.longitude;
-            marker.setLatLng([lat, lon]);
-            map.setView([lat, lon], 16);
-            let speedKmh = Math.round((pos.coords.speed || 0) * 3.6);
-            updateUI(speedKmh, totalDistance);
+            marker.setLatLng([pos.coords.latitude, pos.coords.longitude]);
+            map.setView([pos.coords.latitude, pos.coords.longitude], 16);
+            updateUI(Math.round(pos.coords.speed * 3.6 || 0), totalDistance);
+        }
+
+        function handleSearchTyping() {
+            clearTimeout(autocompleteTimeout);
+            const query = document.getElementById('search-input').value;
+            if (query.length < 3) return;
+            autocompleteTimeout = setTimeout(async () => {
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`);
+                const data = await res.json();
+                const box = document.getElementById('search-results');
+                box.innerHTML = '';
+                if (data.length > 0) {
+                    box.classList.add('active');
+                    data.forEach(item => {
+                        let div = document.createElement('div'); div.className = 'search-item'; div.innerText = item.display_name.split(',')[0];
+                        div.onclick = () => { selectDestination(item); };
+                        box.appendChild(div);
+                    });
+                }
+            }, 350);
+        }
+
+        function selectDestination(item) {
+            document.getElementById('search-wrapper').classList.remove('active');
+            document.getElementById('search-results').classList.remove('active');
+            // Logique de calcul d'itinéraire ici...
         }
 
         function updateUI(speed, dist) {
             document.getElementById('speed').innerText = speed;
             document.getElementById('distance').innerText = dist.toFixed(1);
-            let actualRangeKm = currentRange;
-            let remainingTripKm = Math.round(getRemainingTrajectoryDistance());
-            const rangeLabelEl = document.getElementById('range-label');
-            rangeLabelEl.style.color = (gpxPoints.length > 0 && actualRangeKm < remainingTripKm) ? "#ff3b30" : "var(--text-muted)";
-            document.getElementById('range').innerText = Math.round(currentRange);
+            let remainingTrip = 50; // Exemple calculé
+            document.getElementById('range-label').style.color = (currentRange < remainingTrip) ? "#ff3b30" : "var(--text-muted)";
         }
 
-        function getRemainingTrajectoryDistance() {
-            let routeDist = 0;
-            for (let i = 0; i < gpxPoints.length - 1; i++) {
-                let p1 = gpxPoints[i], p2 = gpxPoints[i+1];
-                routeDist += 6371 * Math.acos(Math.sin(p1[0]*Math.PI/180)*Math.sin(p2[0]*Math.PI/180) + Math.cos(p1[0]*Math.PI/180)*Math.cos(p2[0]*Math.PI/180)*Math.cos((p2[1]-p1[1])*Math.PI/180));
-            }
-            return routeDist;
-        }
-
-        function handleRouteBtnClick() { if (targetDestinationName) menuDeleteGpx(); else document.getElementById('search-wrapper').classList.add('active'); }
-        function openModal() { document.getElementById('reset-modal').classList.add('active'); }
-        function closeModal() { document.getElementById('reset-modal').classList.remove('active'); }
-        function menuResetFull() { currentRange = AUTONOMIE_MAX; totalDistance = 0; localStorage.setItem('moto_distance', 0); closeModal(); }
-        function menuDeleteGpx() { gpxPoints = []; if(gpxLayer) map.removeLayer(gpxLayer); targetDestinationName = null; closeModal(); updateUI(0, totalDistance); }
-        function recenterMap() { if(lastPosition) map.setView([lastPosition.coords.latitude, lastPosition.coords.longitude], 16); }
+        function handleRouteBtnClick() { document.getElementById('search-wrapper').classList.add('active'); }
+        function hideSearchField() { document.getElementById('search-wrapper').classList.remove('active'); document.getElementById('search-results').classList.remove('active'); }
         function triggerGpxUpload() { document.getElementById('gpx-file').click(); }
-        function handleGpxFile(e) { const reader = new FileReader(); reader.onload = (ev) => { localStorage.setItem('moto_gpx_data', ev.target.result); parseAndDrawGpx(ev.target.result, true); }; reader.readAsText(e.target.files[0]); }
-        function parseAndDrawGpx(data, fit) { 
-            const doc = new DOMParser().parseFromString(data, "text/xml");
-            gpxPoints = Array.from(doc.getElementsByTagName("trkpt")).map(p => [parseFloat(p.getAttribute("lat")), parseFloat(p.getAttribute("lon"))]);
-            if(gpxLayer) map.removeLayer(gpxLayer);
-            gpxLayer = L.polyline(gpxPoints, {color: '#0055ff', weight: 7}).addTo(map);
-            if(fit) map.fitBounds(gpxLayer.getBounds());
-        }
+        function recenterMap() { if(lastPosition) map.setView([lastPosition.coords.latitude, lastPosition.coords.longitude], 16); }
     </script>
 </body>
 </html>
+```[cite: 1]
