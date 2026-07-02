@@ -19,14 +19,14 @@
         #map-container { flex: 1; position: relative; border-radius: 14px; overflow: hidden; }
         #map { width: 100%; height: 100%; }
         .search-overlay-bar { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 10; }
-        .search-input-wrapper { display: none; background: var(--search-bg); border-radius: 12px; height: 50px; display: flex; }
+        .search-input-wrapper { display: none; background: var(--search-bg); border-radius: 12px; height: 50px; align-items: center; }
         .search-input-wrapper.active { display: flex; }
-        .search-input-wrapper input { flex: 1; border: none; padding: 0 15px; background: transparent; }
+        .search-input-wrapper input { flex: 1; border: none; padding: 0 15px; background: transparent; height: 100%; }
         .search-results-box { background: var(--search-bg); border-radius: 12px; margin-top: 5px; display: none; max-height: 200px; overflow-y: auto; }
         .search-results-box.active { display: block; }
         .search-item { padding: 14px 15px; border-bottom: 1px solid #eee; cursor: pointer; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-        .btn { color: white; border: none; border-radius: 10px; padding: 12px; font-weight: 600; cursor: pointer; }
+        .btn { color: white; border: none; border-radius: 10px; padding: 12px; font-weight: 600; cursor: pointer; text-align: center; }
         #overlay { position: fixed; inset: 0; background: var(--bg-color); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
     </style>
 </head>
@@ -68,7 +68,7 @@
         <div class="search-overlay-bar">
             <div id="search-wrapper" class="search-input-wrapper">
                 <input type="text" id="search-input" placeholder="Où va-t-on ?" oninput="handleSearchTyping()">
-                <button onclick="hideSearchField()">✕</button>
+                <button onclick="hideSearchField()" style="padding: 0 15px;">✕</button>
             </div>
             <div id="search-results" class="search-results-box"></div>
         </div>
@@ -77,27 +77,43 @@
 
     <div class="controls">
         <button class="btn" style="background:#34c759" onclick="triggerGpxUpload()">📁 Charger GPX</button>
-        <button id="route-btn" class="btn" style="background:#ff9500" onclick="handleRouteBtnClick()">🔍 Trajet Direct</button>
-        <button class="btn" style="background:#8e8e93" onclick="openModal()">⚙️ Options</button>
+        <button id="route-btn" class="btn" style="background:#ff9500" onclick="showSearchField()">🔍 Trajet Direct</button>
+        <button class="btn" style="background:#8e8e93" onclick="alert('Options')">⚙️ Options</button>
         <button class="btn" style="background:#007aff" onclick="recenterMap()">🎯 Recentrer</button>
     </div>
 
-    <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)" style="display:none">
+    <input type="file" id="gpx-file" accept=".gpx" style="display:none">
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        let map, marker, autocompleteTimeout;
+        let map, marker, destinationMarker, autocompleteTimeout;
 
         function startApp() {
             document.getElementById('overlay').style.display = 'none';
             map = L.map('map', { zoomControl: false }).setView([48.57, -3.83], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
             marker = L.marker([0, 0]).addTo(map);
+            
+            // Interaction par clic sur la carte
+            map.on('click', (e) => {
+                setDestination(e.latlng.lat, e.latlng.lng, "Point choisi");
+            });
+
             navigator.geolocation.watchPosition((pos) => {
                 marker.setLatLng([pos.coords.latitude, pos.coords.longitude]);
                 map.setView([pos.coords.latitude, pos.coords.longitude], 16);
             }, () => {}, { enableHighAccuracy: true });
         }
+
+        function setDestination(lat, lon, name) {
+            if (destinationMarker) map.removeLayer(destinationMarker);
+            destinationMarker = L.marker([lat, lon]).addTo(map);
+            map.setView([lat, lon], 14);
+            hideSearchField();
+        }
+
+        function showSearchField() { document.getElementById('search-wrapper').classList.add('active'); }
+        function hideSearchField() { document.getElementById('search-wrapper').classList.remove('active'); document.getElementById('search-results').classList.remove('active'); }
 
         function handleSearchTyping() {
             clearTimeout(autocompleteTimeout);
@@ -114,15 +130,13 @@
                         let div = document.createElement('div');
                         div.className = 'search-item';
                         div.innerText = item.display_name.split(',')[0];
-                        div.onclick = () => { box.classList.remove('active'); document.getElementById('search-wrapper').classList.remove('active'); };
+                        div.onclick = () => { setDestination(item.lat, item.lon, item.display_name); };
                         box.appendChild(div);
                     });
                 }
             }, 350);
         }
 
-        function handleRouteBtnClick() { document.getElementById('search-wrapper').classList.add('active'); }
-        function hideSearchField() { document.getElementById('search-wrapper').classList.remove('active'); document.getElementById('search-results').classList.remove('active'); }
         function triggerGpxUpload() { document.getElementById('gpx-file').click(); }
         function recenterMap() { /* Logique de recentrage */ }
     </script>
