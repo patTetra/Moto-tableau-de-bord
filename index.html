@@ -520,13 +520,13 @@
 
         let targetDestinationName = null;
         let targetCoords = null; 
-        let waypointCoords = null; // Stockage de l'étape intermédiaire
+        let waypointCoords = null; 
         let isCalculatingRoute = false;
         let remainingDurationSeconds = 0; 
         let lastRouteCalculationTime = 0;  
         let autocompleteTimeout = null;
         let pressTimer = null;
-        let longPressedLatLng = null; // Mémoire du point pressé
+        let longPressedLatLng = null; 
 
         let isConnectedBLE = false;
         const REZON_SERVICE_UUID = '0000e0ff-3c17-d293-8e48-14fe2e4da212';
@@ -577,7 +577,7 @@
                 clearTimeout(pressTimer);
                 pressTimer = setTimeout(() => {
                     handleLongPress(e.latlng);
-                }, 8000); // 800ms à 1s pour l'ergonomie iOS tactile
+                }, 750); // Correction appliquée : 750ms au lieu de 8000ms
             });
 
             map.on('mouseup mousemove touchend touchmove contextmenu', () => {
@@ -592,7 +592,6 @@
         function handleLongPress(latlng) {
             longPressedLatLng = latlng;
             
-            // Si aucun trajet n'est actif, le bouton "Ajouter une étape" est grisé/désactivé
             const waypointBtn = document.getElementById('context-btn-waypoint');
             if (!targetCoords) {
                 waypointBtn.style.opacity = "0.4";
@@ -620,7 +619,7 @@
             
             targetDestinationName = "Point sur la carte";
             targetCoords = { lat: longPressedLatLng.lat, lon: longPressedLatLng.lng };
-            waypointCoords = null; // On réinitialise l'étape si nouvelle destination directe
+            waypointCoords = null; 
 
             localStorage.setItem('moto_target_name', targetDestinationName);
             localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
@@ -830,16 +829,14 @@
                 }
             }
 
-            // Gestion de la tolérance à la déviation pour nettoyer le tracé
             if (targetCoords && minDistance > 0.150 && !isCalculatingRoute) {
                 executeSilentRecalculate(currentLat, currentLon);
                 return;
             }
 
-            // Si on a dépassé le point d'étape (waypoint), on le nettoie également
             if (waypointCoords) {
                 let distToWaypoint = calculateDistance(currentLat, currentLon, waypointCoords.lat, waypointCoords.lon);
-                if (distToWaypoint < 0.050) { // Si à moins de 50 mètres de l'étape
+                if (distToWaypoint < 0.050) { 
                     waypointCoords = null;
                     localStorage.removeItem('moto_waypoint_coords');
                 }
@@ -940,7 +937,7 @@
             
             targetDestinationName = displayName.split(',')[0];
             targetCoords = { lat: parseFloat(item.lat), lon: parseFloat(item.lon) };
-            waypointCoords = null; // Reset de l'étape si recherche manuelle
+            waypointCoords = null; 
 
             localStorage.setItem('moto_target_name', targetDestinationName);
             localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
@@ -959,7 +956,6 @@
             try {
                 let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
                 
-                // Si une étape intermédiaire (waypoint) existe, on l'injecte dans le tableau des coordonnées
                 let coordList = [[startLon, startLat]];
                 if (waypointCoords) {
                     coordList.push([waypointCoords.lon, waypointCoords.lat]);
