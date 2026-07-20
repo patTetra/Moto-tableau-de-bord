@@ -267,6 +267,8 @@
             grid-template-columns: 1fr 1fr;
             gap: 8px;
             margin-top: 10px;
+            /* Correction iOS écran d'accueil iPhone 15 Pro */
+            margin-bottom: env(safe-area-inset-bottom);
         }
 
         .ble-panel {
@@ -426,9 +428,10 @@
             <div class="speed-unit">km/h</div>
         </div>
         <div class="stats-stack">
+            <!-- Modification pour l'intersection / carrefour suivant -->
             <div class="mini-card">
-                <div class="mini-label">Parcouru</div>
-                <div><span id="distance" class="mini-value">0.0</span> <span style="font-size:0.75rem; color:var(--text-muted);">km</span></div>
+                <div class="mini-label">Prochain</div>
+                <div><span id="next-intersection-icon" style="font-size:1.1rem; margin-right:2px;">⬆️</span><span id="next-intersection-dist" class="mini-value">--- m</span></div>
             </div>
             <div class="mini-card">
                 <div id="range-label" class="mini-label">Autonomie</div>
@@ -648,6 +651,7 @@
                 }
                 if (gpxPoints.length > 0) {
                     checkRouteDeviationAndClean(lat, lon);
+                    updateNextIntersectionUI(lat, lon);
                 }
             }
 
@@ -685,6 +689,99 @@
                 routeDist += calculateDistance(gpxPoints[i][0], gpxPoints[i][1], gpxPoints[i+1][0], gpxPoints[i+1][1]);
             }
             return routeDist;
+        }
+
+        /* Détermination géométrique basique des intersections à partir des nœuds GPX */
+        function updateNextIntersectionUI(currentLat, currentLon) {
+            if (gpxPoints.length < 3) {
+                document.getElementById('next-intersection-icon').innerText = "🏁";
+                document.getElementById('next-intersection-dist').innerText = "Arrivée";
+                return;
+            }
+
+            let intersectionIndex = -1;
+            let accumulationDistance = 0;
+            
+            // On calcule la distance directe jusqu'au premier point
+            accumulationDistance += calculateDistance(currentLat, currentLon, gpxPoints[0][0], gpxPoints[0][1]);
+
+            for (let i = 0; i < gpxPoints.length - 2; i++) {
+                let p1 = gpxPoints[i];
+                let p2 = gpxPoints[i+1];
+                let p3 = gpxPoints[i+2];
+
+                accumulationDistance += calculateDistance(p1[0], p1[1], p2[0], p2[1]);
+
+                // Calcul de l'angle du virage entre les segments (p1->p2) et (p2->p3)
+                let bearing1 = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * 180 / Math.PI;
+                let bearing2 = Math.atan2(p3[1] - p2[1], p3[0] - p2[0]) * 180 / Math.PI;
+                let angleDiff = bearing2 - bearing1;
+                
+                if (angleDiff > 180) angleDiff -= 360;
+                if (angleDiff < -180) angleDiff += 360;
+
+                // Si le changement d'angle est supérieur à 25 degrés, on considère que c'est une action de direction relevante
+                if (Math.abs(angleDiff) > 25) {
+                    intersectionIndex = i + 1;
+                    break;
+                }
+            }
+
+            if (intersectionIndex === -1) {
+                // Si aucune courbe prononcée, le prochain point d'intérêt majeur est la fin du tracé
+                document.getElementById('next-intersection-icon').innerText = "⬆️";
+                let totalDist = getRemainingTrajectoryDistance() + calculateDistance(currentLat, currentLon, gpxPoints[0][0], gpxPoints[0][1]);
+                formatDistText(totalDist);
+                return;
+            }
+
+            // Identification du type de carrefour selon la géométrie de la route
+            let p1 = gpxPoints[intersectionIndex - 1];
+            let p2 = gpxPoints[intersectionIndex];
+            let p3 = gpxPoints[intersectionIndex + 1];
+            
+            let b1 = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * 180 / Math.PI;
+            let b2 = Math.atan2(p3[1] - p2[1], p3[0] - p2[0]) * 180 / Math.PI;
+            let diff = b2 - b1;
+            if (diff > 180) diff -= 360;
+            if (diff < -180) diff += 360;
+
+            let icon = "⬆️";
+            
+            // Détection heuristique simplifiée des ronds-points (succession de petits angles réguliers)
+            if (gpxPoints.length > intersectionIndex + 3) {
+                let p4 = gpxPoints[intersectionIndex + 2];
+                let b3 = Math.atan2(p4[1] - p3[1], p4[0] - p3[0]) * 180 / Math.PI;
+                let diff2 = b3 - b2;
+                if (diff2 > 180) diff2 -= 360;
+                if (diff2 < -180) diff2 += 360;
+                
+                if (diff > 40 && diff2 < -20) { 
+                    icon = "⭕"; // Comportement typique d'entrée/sortie de rond-point
+                }
+            }
+
+            if (icon !== "⭕") {
+                if (Math.abs(diff) >= 75) {
+                    icon = "🛑"; // Angle droit / Intersection type Stop ou Feu
+                } else if (diff < -25) {
+                    icon = "⬅️"; // Tourner à gauche
+                } else if (diff > 25) {
+                    icon = "➡️"; // Tourner à droite
+                }
+            }
+
+            document.getElementById('next-intersection-icon').innerText = icon;
+            formatDistText(accumulationDistance);
+        }
+
+        function formatDistText(distKm) {
+            let el = document.getElementById('next-intersection-dist');
+            if (distKm < 1) {
+                el.innerText = `${Math.round(distKm * 1000)} m`;
+            } else {
+                el.innerText = `${distKm.toFixed(1)} km`;
+            }
         }
 
         function checkRouteDeviationAndClean(currentLat, currentLon) {
@@ -973,7 +1070,6 @@
 
         function updateUI(speed, distance) {
             document.getElementById('speed').innerText = speed;
-            document.getElementById('distance').innerText = distance.toFixed(1);
             
             const routeBtn = document.getElementById('route-btn');
             if (targetDestinationName) {
@@ -1019,7 +1115,6 @@
                 rangeValueEl.innerHTML = `${remainingTripKm} / <span id="dynamic-range-span">${displayRangeValue}</span>`;
 
                 const rangeSpan = document.getElementById('dynamic-range-span');
-                // MODIFICATION APPLIQUÉE : couleur basée sur la comparaison entre distance restante et autonomie
                 if (remainingTripKm > actualRangeKm) {
                     rangeSpan.style.color = "#ff3b30";
                 } else {
@@ -1103,6 +1198,8 @@
             localStorage.removeItem('moto_gpx_data');
             localStorage.removeItem('moto_target_name');
             localStorage.removeItem('moto_target_coords');
+            document.getElementById('next-intersection-icon').innerText = "⬆️";
+            document.getElementById('next-intersection-dist').innerText = "--- m";
             updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
         }
 
