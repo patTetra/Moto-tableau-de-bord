@@ -76,7 +76,7 @@
             padding: 0;
             -webkit-user-select: none;
             user-select: none;
-            -webkit-touch-callout: none; /* Désactive le menu contextuel iOS natif sur les liens/images */
+            -webkit-touch-callout: none;
         }
 
         body {
@@ -573,8 +573,6 @@
                 autoCenterTimeout = setTimeout(() => { autoCenter = true; }, 6000);
             });
 
-            // CORRECTION IMPORTANTE : Utilisation de l'événement natif tactile 'contextmenu' de Leaflet
-            // C'est le seul moyen 100% fiable sur iOS pour capter l'appui long sans conflit de déplacement
             map.on('contextmenu', (e) => {
                 if (e.originalEvent) {
                     e.originalEvent.preventDefault();
@@ -591,6 +589,10 @@
         function handleLongPress(latlng) {
             longPressedLatLng = latlng;
             
+            // Placer un repère visuel temporaire sur la carte là où l'utilisateur appuie
+            if (tempDestinationMarker) map.removeLayer(tempDestinationMarker);
+            tempDestinationMarker = L.circleMarker(latlng, { radius: 10, color: '#ff3b30', fillColor: '#ff3b30', fillOpacity: 0.6 }).addTo(map);
+
             const waypointBtn = document.getElementById('context-btn-waypoint');
             if (!targetCoords) {
                 waypointBtn.style.opacity = "0.4";
@@ -609,12 +611,11 @@
 
         function closeContextModal() {
             document.getElementById('context-modal').classList.remove('active');
-            longPressedLatLng = null;
+            // On ne supprime pas le marqueur visuel tout de suite si l'utilisateur valide l'action
         }
 
         function contextSetNewDestination() {
             closeContextModal();
-            if (tempDestinationMarker) map.removeLayer(tempDestinationMarker);
             
             targetDestinationName = "Point sur la carte";
             targetCoords = { lat: longPressedLatLng.lat, lon: longPressedLatLng.lng };
@@ -624,8 +625,10 @@
             localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
             localStorage.removeItem('moto_waypoint_coords');
 
-            let startLat = lastPosition ? lastPosition.coords.latitude : longPressedLatLng.lat;
-            let startLon = lastPosition ? lastPosition.coords.longitude : longPressedLatLng.lng;
+            // Récupération sécurisée des coordonnées de départ
+            let startLat = lastPosition ? lastPosition.coords.latitude : map.getCenter().lat;
+            let startLon = lastPosition ? lastPosition.coords.longitude : map.getCenter().lng;
+            
             executeSilentRecalculate(startLat, startLon, true);
         }
 
@@ -636,8 +639,9 @@
             waypointCoords = { lat: longPressedLatLng.lat, lon: longPressedLatLng.lng };
             localStorage.setItem('moto_waypoint_coords', JSON.stringify(waypointCoords));
 
-            let startLat = lastPosition ? lastPosition.coords.latitude : longPressedLatLng.lat;
-            let startLon = lastPosition ? lastPosition.coords.longitude : longPressedLatLng.lng;
+            let startLat = lastPosition ? lastPosition.coords.latitude : map.getCenter().lat;
+            let startLon = lastPosition ? lastPosition.coords.longitude : map.getCenter().lng;
+            
             executeSilentRecalculate(startLat, startLon, true);
         }
 
@@ -942,7 +946,10 @@
             localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
             localStorage.removeItem('moto_waypoint_coords');
 
-            executeSilentRecalculate(lastPosition.coords.latitude, lastPosition.coords.longitude, true);
+            let startLat = lastPosition ? lastPosition.coords.latitude : map.getCenter().lat;
+            let startLon = lastPosition ? lastPosition.coords.longitude : map.getCenter().lng;
+
+            executeSilentRecalculate(startLat, startLon, true);
         }
 
         async function executeSilentRecalculate(startLat, startLon, fitBounds = false) {
@@ -955,11 +962,12 @@
             try {
                 let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
                 
-                let coordList = [[startLon, startLat]];
+                // OpenRouteService attend [longitude, latitude]
+                let coordList = [[parseFloat(startLon), parseFloat(startLat)]];
                 if (waypointCoords) {
-                    coordList.push([waypointCoords.lon, waypointCoords.lat]);
+                    coordList.push([parseFloat(waypointCoords.lon), parseFloat(waypointCoords.lat)]);
                 }
-                coordList.push([targetCoords.lon, targetCoords.lat]);
+                coordList.push([parseFloat(targetCoords.lon), parseFloat(targetCoords.lat)]);
 
                 let bodyQuery = {
                     coordinates: coordList,
@@ -992,12 +1000,19 @@
 
                     localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
                     drawGpxPolyline(fitBounds);
+                    
+                    // Nettoyer le marqueur temporaire rouge puisque le tracé est calculé
+                    if (tempDestinationMarker) {
+                        map.removeLayer(tempDestinationMarker);
+                        tempDestinationMarker = null;
+                    }
                 }
             } catch (e) {
                 console.error("Échec OpenRouteService", e);
             } finally {
                 isCalculatingRoute = false;
-                updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
+                let currentSpeed = document.getElementById('speed').innerText;
+                updateUI(Math.round(currentSpeed ? currentSpeed : 0), totalDistance);
             }
         }
 
@@ -1242,6 +1257,10 @@
             closeModal();
             gpxPoints = [];
             if (gpxLayer) map.removeLayer(gpxLayer);
+            if (tempDestinationMarker) {
+                map.removeLayer(tempDestinationMarker);
+                tempDestinationMarker = null;
+            }
             targetDestinationName = null;
             targetCoords = null;
             waypointCoords = null;
