@@ -76,6 +76,7 @@
             padding: 0;
             -webkit-user-select: none;
             user-select: none;
+            -webkit-touch-callout: none; /* Désactive le menu contextuel iOS natif sur les liens/images */
         }
 
         body {
@@ -525,7 +526,6 @@
         let remainingDurationSeconds = 0; 
         let lastRouteCalculationTime = 0;  
         let autocompleteTimeout = null;
-        let pressTimer = null;
         let longPressedLatLng = null; 
 
         let isConnectedBLE = false;
@@ -552,7 +552,7 @@
         updateUI(0, totalDistance);
 
         function initMap() {
-            map = L.map('map', { zoomControl: false, inertia: false }).setView([46.2276, 2.2137], 13);
+            map = L.map('map', { zoomControl: false, inertia: false, tap: false }).setView([46.2276, 2.2137], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '© OpenStreetMap'
@@ -573,15 +573,14 @@
                 autoCenterTimeout = setTimeout(() => { autoCenter = true; }, 6000);
             });
 
-            map.on('mousedown touchstart', (e) => {
-                clearTimeout(pressTimer);
-                pressTimer = setTimeout(() => {
-                    handleLongPress(e.latlng);
-                }, 750); // Correction appliquée : 750ms au lieu de 8000ms
-            });
-
-            map.on('mouseup mousemove touchend touchmove contextmenu', () => {
-                clearTimeout(pressTimer);
+            // CORRECTION IMPORTANTE : Utilisation de l'événement natif tactile 'contextmenu' de Leaflet
+            // C'est le seul moyen 100% fiable sur iOS pour capter l'appui long sans conflit de déplacement
+            map.on('contextmenu', (e) => {
+                if (e.originalEvent) {
+                    e.originalEvent.preventDefault();
+                    e.originalEvent.stopPropagation();
+                }
+                handleLongPress(e.latlng);
             });
 
             if (localStorage.getItem('moto_gpx_data')) {
@@ -889,11 +888,11 @@
         function handleSearchTyping() {
             clearTimeout(autocompleteTimeout);
             const query = document.getElementById('search-input').value.trim();
-            const resultsBox = document.getElementById('search-results');
+            const fontBox = document.getElementById('search-results');
 
             if (query.length < 3) {
-                resultsBox.classList.remove('active');
-                resultsBox.innerHTML = "";
+                fontBox.classList.remove('active');
+                fontBox.innerHTML = "";
                 return;
             }
 
@@ -908,9 +907,9 @@
                     let response = await fetch(url, { headers: { 'Accept-Language': 'fr' } });
                     let data = await response.json();
 
-                    resultsBox.innerHTML = "";
+                    fontBox.innerHTML = "";
                     if (data.length > 0) {
-                        resultsBox.classList.add('active');
+                        fontBox.classList.add('active');
                         data.forEach(item => {
                             let parts = item.display_name.split(',');
                             let shortName = parts[0];
@@ -921,10 +920,10 @@
                             div.className = 'search-item';
                             div.innerText = shortName;
                             div.onclick = () => selectDestination(item, shortName);
-                            resultsBox.appendChild(div);
+                            fontBox.appendChild(div);
                         });
                     } else {
-                        resultsBox.classList.remove('active');
+                        fontBox.classList.remove('active');
                     }
                 } catch (e) {
                     console.error("Erreur d'auto-complétion", e);
