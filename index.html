@@ -484,6 +484,18 @@
         </div>
     </div>
 
+    <!-- Modal d'interaction contextuel pour l'appui long -->
+    <div id="context-modal" class="modal-shade" onclick="closeContextModal(event)">
+        <div class="modal-box" onclick="event.stopPropagation()">
+            <div class="modal-title" id="context-modal-title">POINT SÉLECTIONNÉ</div>
+            <div class="modal-menu-stack">
+                <button id="context-btn-waypoint" class="modal-btn" onclick="contextAddWaypoint()">Ajouter comme ÉTAPE au trajet</button>
+                <button class="modal-btn" onclick="contextSetNewDestination()">Définir comme NOUVELLE DESTINATION</button>
+                <button class="modal-btn modal-btn-cancel" onclick="closeContextModal()">Annuler</button>
+            </div>
+        </div>
+    </div>
+
     <input type="file" id="gpx-file" accept=".gpx" onchange="handleGpxFile(event)">
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -508,11 +520,13 @@
 
         let targetDestinationName = null;
         let targetCoords = null; 
+        let waypointCoords = null; // Stockage de l'étape intermédiaire
         let isCalculatingRoute = false;
         let remainingDurationSeconds = 0; 
         let lastRouteCalculationTime = 0;  
         let autocompleteTimeout = null;
         let pressTimer = null;
+        let longPressedLatLng = null; // Mémoire du point pressé
 
         let isConnectedBLE = false;
         const REZON_SERVICE_UUID = '0000e0ff-3c17-d293-8e48-14fe2e4da212';
@@ -530,6 +544,9 @@
         if (localStorage.getItem('moto_target_name') && localStorage.getItem('moto_target_coords')) {
             targetDestinationName = localStorage.getItem('moto_target_name');
             targetCoords = JSON.parse(localStorage.getItem('moto_target_coords'));
+        }
+        if (localStorage.getItem('moto_waypoint_coords')) {
+            waypointCoords = JSON.parse(localStorage.getItem('moto_waypoint_coords'));
         }
         
         updateUI(0, totalDistance);
@@ -560,7 +577,7 @@
                 clearTimeout(pressTimer);
                 pressTimer = setTimeout(() => {
                     handleLongPress(e.latlng);
-                }, 1000);
+                }, 8000); // 800ms à 1s pour l'ergonomie iOS tactile
             });
 
             map.on('mouseup mousemove touchend touchmove contextmenu', () => {
@@ -573,37 +590,57 @@
         }
 
         function handleLongPress(latlng) {
-            if (targetDestinationName) {
-                if (!confirm(`Arrêter le guidage vers ${targetDestinationName} pour choisir un nouveau point ?`)) {
-                    return;
-                }
-                menuDeleteGpx();
+            longPressedLatLng = latlng;
+            
+            // Si aucun trajet n'est actif, le bouton "Ajouter une étape" est grisé/désactivé
+            const waypointBtn = document.getElementById('context-btn-waypoint');
+            if (!targetCoords) {
+                waypointBtn.style.opacity = "0.4";
+                waypointBtn.disabled = true;
+            } else {
+                waypointBtn.style.opacity = "1";
+                waypointBtn.disabled = false;
             }
+            
+            openContextModal();
+        }
 
+        function openContextModal() {
+            document.getElementById('context-modal').classList.add('active');
+        }
+
+        function closeContextModal() {
+            document.getElementById('context-modal').classList.remove('active');
+            longPressedLatLng = null;
+        }
+
+        function contextSetNewDestination() {
+            closeContextModal();
             if (tempDestinationMarker) map.removeLayer(tempDestinationMarker);
-            tempDestinationMarker = L.marker(latlng).addTo(map);
+            
+            targetDestinationName = "Point sur la carte";
+            targetCoords = { lat: longPressedLatLng.lat, lon: longPressedLatLng.lng };
+            waypointCoords = null; // On réinitialise l'étape si nouvelle destination directe
 
-            setTimeout(() => {
-                if (confirm("Définir ce point sur la carte comme destination ?")) {
-                    targetDestinationName = "Point sur la carte";
-                    targetCoords = { lat: latlng.lat, lon: latlng.lng };
+            localStorage.setItem('moto_target_name', targetDestinationName);
+            localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
+            localStorage.removeItem('moto_waypoint_coords');
 
-                    localStorage.setItem('moto_target_name', targetDestinationName);
-                    localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
+            let startLat = lastPosition ? lastPosition.coords.latitude : longPressedLatLng.lat;
+            let startLon = lastPosition ? lastPosition.coords.longitude : longPressedLatLng.lng;
+            executeSilentRecalculate(startLat, startLon, true);
+        }
 
-                    executeSilentRecalculate(lastPosition ? lastPosition.coords.latitude : latlng.lat, lastPosition ? lastPosition.coords.longitude : latlng.lng, true);
-                    
-                    if (tempDestinationMarker) {
-                        map.removeLayer(tempDestinationMarker);
-                        tempDestinationMarker = null;
-                    }
-                } else {
-                    if (tempDestinationMarker) {
-                        map.removeLayer(tempDestinationMarker);
-                        tempDestinationMarker = null;
-                    }
-                }
-            }, 50);
+        function contextAddWaypoint() {
+            closeContextModal();
+            if (!targetCoords) return;
+
+            waypointCoords = { lat: longPressedLatLng.lat, lon: longPressedLatLng.lng };
+            localStorage.setItem('moto_waypoint_coords', JSON.stringify(waypointCoords));
+
+            let startLat = lastPosition ? lastPosition.coords.latitude : longPressedLatLng.lat;
+            let startLon = lastPosition ? lastPosition.coords.longitude : longPressedLatLng.lng;
+            executeSilentRecalculate(startLat, startLon, true);
         }
 
         function startApp() {
@@ -689,7 +726,6 @@
             return routeDist;
         }
 
-        /* Calcul temporel vers la prochaine intersection à partir de la vitesse GPS */
         function updateNextIntersectionUI(currentLat, currentLon, currentSpeedKmh) {
             if (gpxPoints.length < 3) {
                 document.getElementById('next-intersection-icon').innerText = "🏁";
@@ -769,7 +805,6 @@
 
         function formatTimeText(distKm, speedKmh) {
             let el = document.getElementById('next-intersection-time');
-            // Si la vitesse est nulle ou trop faible (< 5km/h), on se base sur une estimation par défaut à 40km/h
             let referenceSpeed = speedKmh > 5 ? speedKmh : 40;
             
             let timeHours = distKm / referenceSpeed;
@@ -779,7 +814,6 @@
                 el.innerText = `${timeSeconds} s`;
             } else {
                 let minutes = Math.floor(timeSeconds / 60);
-                let seconds = timeSeconds % 60;
                 el.innerText = `${minutes} min`;
             }
         }
@@ -796,9 +830,19 @@
                 }
             }
 
+            // Gestion de la tolérance à la déviation pour nettoyer le tracé
             if (targetCoords && minDistance > 0.150 && !isCalculatingRoute) {
                 executeSilentRecalculate(currentLat, currentLon);
                 return;
+            }
+
+            // Si on a dépassé le point d'étape (waypoint), on le nettoie également
+            if (waypointCoords) {
+                let distToWaypoint = calculateDistance(currentLat, currentLon, waypointCoords.lat, waypointCoords.lon);
+                if (distToWaypoint < 0.050) { // Si à moins de 50 mètres de l'étape
+                    waypointCoords = null;
+                    localStorage.removeItem('moto_waypoint_coords');
+                }
             }
 
             if (closestIndex > 0 && minDistance < 0.150) {
@@ -896,9 +940,11 @@
             
             targetDestinationName = displayName.split(',')[0];
             targetCoords = { lat: parseFloat(item.lat), lon: parseFloat(item.lon) };
+            waypointCoords = null; // Reset de l'étape si recherche manuelle
 
             localStorage.setItem('moto_target_name', targetDestinationName);
             localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
+            localStorage.removeItem('moto_waypoint_coords');
 
             executeSilentRecalculate(lastPosition.coords.latitude, lastPosition.coords.longitude, true);
         }
@@ -913,8 +959,15 @@
             try {
                 let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
                 
+                // Si une étape intermédiaire (waypoint) existe, on l'injecte dans le tableau des coordonnées
+                let coordList = [[startLon, startLat]];
+                if (waypointCoords) {
+                    coordList.push([waypointCoords.lon, waypointCoords.lat]);
+                }
+                coordList.push([targetCoords.lon, targetCoords.lat]);
+
                 let bodyQuery = {
-                    coordinates: [[startLon, startLat], [targetCoords.lon, targetCoords.lat]],
+                    coordinates: coordList,
                     preference: "recommended",
                     options: {
                         avoid_features: ["highways"] 
@@ -1007,9 +1060,11 @@
                 const gpxText = e.target.result;
                 targetDestinationName = null;
                 targetCoords = null;
+                waypointCoords = null;
                 remainingDurationSeconds = 0;
                 localStorage.removeItem('moto_target_name');
                 localStorage.removeItem('moto_target_coords');
+                localStorage.removeItem('moto_waypoint_coords');
                 localStorage.setItem('moto_gpx_data', gpxText); 
                 parseAndDrawGpx(gpxText, true);
             };
@@ -1194,10 +1249,12 @@
             if (gpxLayer) map.removeLayer(gpxLayer);
             targetDestinationName = null;
             targetCoords = null;
+            waypointCoords = null;
             remainingDurationSeconds = 0;
             localStorage.removeItem('moto_gpx_data');
             localStorage.removeItem('moto_target_name');
             localStorage.removeItem('moto_target_coords');
+            localStorage.removeItem('moto_waypoint_coords');
             document.getElementById('next-intersection-icon').innerText = "⬆️";
             document.getElementById('next-intersection-time').innerText = "-- min";
             updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
