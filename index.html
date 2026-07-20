@@ -267,7 +267,6 @@
             grid-template-columns: 1fr 1fr;
             gap: 8px;
             margin-top: 10px;
-            /* Correction iOS écran d'accueil iPhone 15 Pro */
             margin-bottom: env(safe-area-inset-bottom);
         }
 
@@ -428,10 +427,9 @@
             <div class="speed-unit">km/h</div>
         </div>
         <div class="stats-stack">
-            <!-- Modification pour l'intersection / carrefour suivant -->
             <div class="mini-card">
-                <div class="mini-label">Prochain</div>
-                <div><span id="next-intersection-icon" style="font-size:1.1rem; margin-right:2px;">⬆️</span><span id="next-intersection-dist" class="mini-value">--- m</span></div>
+                <div class="mini-label">Dans</div>
+                <div><span id="next-intersection-icon" style="font-size:1.1rem; margin-right:2px;">⬆️</span><span id="next-intersection-time" class="mini-value">-- min</span></div>
             </div>
             <div class="mini-card">
                 <div id="range-label" class="mini-label">Autonomie</div>
@@ -651,7 +649,7 @@
                 }
                 if (gpxPoints.length > 0) {
                     checkRouteDeviationAndClean(lat, lon);
-                    updateNextIntersectionUI(lat, lon);
+                    updateNextIntersectionUI(lat, lon, speedKmh);
                 }
             }
 
@@ -691,18 +689,17 @@
             return routeDist;
         }
 
-        /* Détermination géométrique basique des intersections à partir des nœuds GPX */
-        function updateNextIntersectionUI(currentLat, currentLon) {
+        /* Calcul temporel vers la prochaine intersection à partir de la vitesse GPS */
+        function updateNextIntersectionUI(currentLat, currentLon, currentSpeedKmh) {
             if (gpxPoints.length < 3) {
                 document.getElementById('next-intersection-icon').innerText = "🏁";
-                document.getElementById('next-intersection-dist').innerText = "Arrivée";
+                document.getElementById('next-intersection-time').innerText = "Arrivée";
                 return;
             }
 
             let intersectionIndex = -1;
             let accumulationDistance = 0;
             
-            // On calcule la distance directe jusqu'au premier point
             accumulationDistance += calculateDistance(currentLat, currentLon, gpxPoints[0][0], gpxPoints[0][1]);
 
             for (let i = 0; i < gpxPoints.length - 2; i++) {
@@ -712,7 +709,6 @@
 
                 accumulationDistance += calculateDistance(p1[0], p1[1], p2[0], p2[1]);
 
-                // Calcul de l'angle du virage entre les segments (p1->p2) et (p2->p3)
                 let bearing1 = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * 180 / Math.PI;
                 let bearing2 = Math.atan2(p3[1] - p2[1], p3[0] - p2[0]) * 180 / Math.PI;
                 let angleDiff = bearing2 - bearing1;
@@ -720,7 +716,6 @@
                 if (angleDiff > 180) angleDiff -= 360;
                 if (angleDiff < -180) angleDiff += 360;
 
-                // Si le changement d'angle est supérieur à 25 degrés, on considère que c'est une action de direction relevante
                 if (Math.abs(angleDiff) > 25) {
                     intersectionIndex = i + 1;
                     break;
@@ -728,14 +723,12 @@
             }
 
             if (intersectionIndex === -1) {
-                // Si aucune courbe prononcée, le prochain point d'intérêt majeur est la fin du tracé
                 document.getElementById('next-intersection-icon').innerText = "⬆️";
                 let totalDist = getRemainingTrajectoryDistance() + calculateDistance(currentLat, currentLon, gpxPoints[0][0], gpxPoints[0][1]);
-                formatDistText(totalDist);
+                formatTimeText(totalDist, currentSpeedKmh);
                 return;
             }
 
-            // Identification du type de carrefour selon la géométrie de la route
             let p1 = gpxPoints[intersectionIndex - 1];
             let p2 = gpxPoints[intersectionIndex];
             let p3 = gpxPoints[intersectionIndex + 1];
@@ -748,7 +741,6 @@
 
             let icon = "⬆️";
             
-            // Détection heuristique simplifiée des ronds-points (succession de petits angles réguliers)
             if (gpxPoints.length > intersectionIndex + 3) {
                 let p4 = gpxPoints[intersectionIndex + 2];
                 let b3 = Math.atan2(p4[1] - p3[1], p4[0] - p3[0]) * 180 / Math.PI;
@@ -757,30 +749,38 @@
                 if (diff2 < -180) diff2 += 360;
                 
                 if (diff > 40 && diff2 < -20) { 
-                    icon = "⭕"; // Comportement typique d'entrée/sortie de rond-point
+                    icon = "⭕"; 
                 }
             }
 
             if (icon !== "⭕") {
                 if (Math.abs(diff) >= 75) {
-                    icon = "🛑"; // Angle droit / Intersection type Stop ou Feu
+                    icon = "🛑"; 
                 } else if (diff < -25) {
-                    icon = "⬅️"; // Tourner à gauche
+                    icon = "⬅️"; 
                 } else if (diff > 25) {
-                    icon = "➡️"; // Tourner à droite
+                    icon = "➡️"; 
                 }
             }
 
             document.getElementById('next-intersection-icon').innerText = icon;
-            formatDistText(accumulationDistance);
+            formatTimeText(accumulationDistance, currentSpeedKmh);
         }
 
-        function formatDistText(distKm) {
-            let el = document.getElementById('next-intersection-dist');
-            if (distKm < 1) {
-                el.innerText = `${Math.round(distKm * 1000)} m`;
+        function formatTimeText(distKm, speedKmh) {
+            let el = document.getElementById('next-intersection-time');
+            // Si la vitesse est nulle ou trop faible (< 5km/h), on se base sur une estimation par défaut à 40km/h
+            let referenceSpeed = speedKmh > 5 ? speedKmh : 40;
+            
+            let timeHours = distKm / referenceSpeed;
+            let timeSeconds = Math.round(timeHours * 3600);
+
+            if (timeSeconds < 60) {
+                el.innerText = `${timeSeconds} s`;
             } else {
-                el.innerText = `${distKm.toFixed(1)} km`;
+                let minutes = Math.floor(timeSeconds / 60);
+                let seconds = timeSeconds % 60;
+                el.innerText = `${minutes} min`;
             }
         }
 
@@ -1199,7 +1199,7 @@
             localStorage.removeItem('moto_target_name');
             localStorage.removeItem('moto_target_coords');
             document.getElementById('next-intersection-icon').innerText = "⬆️";
-            document.getElementById('next-intersection-dist').innerText = "--- m";
+            document.getElementById('next-intersection-time').innerText = "-- min";
             updateUI(Math.round(document.getElementById('speed').innerText), totalDistance);
         }
 
