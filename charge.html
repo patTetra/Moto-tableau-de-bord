@@ -37,8 +37,10 @@
         }
 
         header {
-            text-align: center;
-            padding: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
         }
 
         header h1 {
@@ -50,6 +52,16 @@
 
         header span {
             color: var(--accent-red);
+        }
+
+        .settings-btn {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            font-size: 18px;
+            padding: 8px 12px;
+            border-radius: 12px;
+            cursor: pointer;
         }
 
         /* Nav Mode Tabs */
@@ -178,6 +190,7 @@
             color: #fff;
             text-align: center;
             outline: none;
+            user-select: text;
         }
 
         /* Result Display */
@@ -221,12 +234,79 @@
             font-weight: 600;
             margin-top: 4px;
         }
+
+        /* Modal Settings */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 20px;
+            width: 100%;
+            max-width: 350px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            font-size: 18px;
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .input-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .input-row label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .save-btn {
+            background: var(--accent-red);
+            color: #fff;
+            border: none;
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
 
     <header>
         <h1>REZON <span>BOHEMIA</span></h1>
+        <button class="settings-btn" onclick="toggleSettings(true)">⚙️</button>
     </header>
 
     <!-- Selecteur de mode principal -->
@@ -241,8 +321,8 @@
         
         <!-- Solo / Duo -->
         <div class="segmented">
-            <button class="seg-btn active" id="btn-solo" onclick="setParam('passenger', 'solo')">👤 Solo (170 km)</button>
-            <button class="seg-btn" id="btn-duo" onclick="setParam('passenger', 'duo')">👥 Duo (140 km)</button>
+            <button class="seg-btn active" id="btn-solo" onclick="setParam('passenger', 'solo')">👤 Solo (<span id="label-solo-km">170</span> km)</button>
+            <button class="seg-btn" id="btn-duo" onclick="setParam('passenger', 'duo')">👥 Duo (<span id="label-duo-km">140</span> km)</button>
         </div>
 
         <!-- Borne / Maison -->
@@ -289,18 +369,71 @@
         <div class="badge" id="result-badge">Autonomie : +119 km (Total 170 km)</div>
     </div>
 
+    <!-- Modal Réglages -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Réglages Autonomie</h2>
+                <button class="close-btn" onclick="toggleSettings(false)">✕</button>
+            </div>
+
+            <div class="input-row">
+                <label for="cfg-solo">Autonomie à 100% en Solo (km)</label>
+                <input type="number" id="cfg-solo" class="number-input" style="font-size: 18px; padding: 8px;" value="170">
+            </div>
+
+            <div class="input-row">
+                <label for="cfg-duo">Autonomie à 100% en Duo (km)</label>
+                <input type="number" id="cfg-duo" class="number-input" style="font-size: 18px; padding: 8px;" value="140">
+            </div>
+
+            <button class="save-btn" onclick="saveSettings()">Enregistrer</button>
+        </div>
+    </div>
+
     <script>
         // Données techniques de la Rezon Bohemia
-        const CONFIG = {
-            range: { solo: 170, duo: 140 },
-            chargeMinutes: { borne: 150, maison: 270 } // 2h30 = 150min, 4h30 = 270min
+        let CONFIG = {
+            range: { 
+                solo: parseInt(localStorage.getItem('rezon_solo_km')) || 170, 
+                duo: parseInt(localStorage.getItem('rezon_duo_km')) || 140 
+            },
+            chargeMinutes: { borne: 150, maison: 270 }
         };
 
         let state = {
-            mode: 1, // 1: Temps pour 100%, 2: Batterie après X min
+            mode: 1,
             passenger: 'solo',
             location: 'borne'
         };
+
+        function toggleSettings(show) {
+            document.getElementById('settings-modal').style.display = show ? 'flex' : 'none';
+            if(show) {
+                document.getElementById('cfg-solo').value = CONFIG.range.solo;
+                document.getElementById('cfg-duo').value = CONFIG.range.duo;
+            }
+        }
+
+        function saveSettings() {
+            const soloVal = parseInt(document.getElementById('cfg-solo').value) || 170;
+            const duoVal = parseInt(document.getElementById('cfg-duo').value) || 140;
+
+            CONFIG.range.solo = soloVal;
+            CONFIG.range.duo = duoVal;
+
+            localStorage.setItem('rezon_solo_km', soloVal);
+            localStorage.setItem('rezon_duo_km', duoVal);
+
+            updateLabels();
+            updateCalculations();
+            toggleSettings(false);
+        }
+
+        function updateLabels() {
+            document.getElementById('label-solo-km').innerText = CONFIG.range.solo;
+            document.getElementById('label-duo-km').innerText = CONFIG.range.duo;
+        }
 
         function switchMode(newMode) {
             state.mode = newMode;
@@ -314,7 +447,6 @@
         function setParam(key, value) {
             state[key] = value;
             
-            // Mise à jour UI boutons
             if(key === 'passenger') {
                 document.getElementById('btn-solo').classList.toggle('active', value === 'solo');
                 document.getElementById('btn-duo').classList.toggle('active', value === 'duo');
@@ -337,14 +469,12 @@
             const fullChargeTime = CONFIG.chargeMinutes[state.location];
 
             if (state.mode === 1) {
-                // MODE 1: Calcul du temps jusqu'à 100%
                 const currentPct = parseInt(document.getElementById('battery-range').value);
                 document.getElementById('battery-val').innerText = `${currentPct}%`;
 
                 const pctToCharge = 100 - currentPct;
                 const minutesNeeded = (pctToCharge / 100) * fullChargeTime;
 
-                // Calcul heure de fin
                 const now = new Date();
                 const endTime = new Date(now.getTime() + minutesNeeded * 60000);
                 const endStr = endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -358,13 +488,11 @@
                 document.getElementById('result-badge').innerText = `Actuel : ${currentKm} km | À charger : +${kmMissing} km`;
 
             } else {
-                // MODE 2: Calcul du % atteint après X min
                 const startPct = parseInt(document.getElementById('battery-range-m2').value);
                 document.getElementById('battery-val-m2').innerText = `${startPct}%`;
 
                 const chargeTimeInput = parseInt(document.getElementById('time-input').value) || 0;
 
-                // Calcul du % gagné
                 const pctGained = (chargeTimeInput / fullChargeTime) * 100;
                 const finalPct = Math.min(100, Math.round(startPct + pctGained));
                 
@@ -379,6 +507,7 @@
         }
 
         // Initialisation au chargement
+        updateLabels();
         updateCalculations();
     </script>
 </body>
