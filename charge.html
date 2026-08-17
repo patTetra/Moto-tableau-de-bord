@@ -171,6 +171,32 @@
             box-shadow: 0 0 10px rgba(0, 180, 216, 0.5);
         }
 
+        /* Nouveaux boutons WAF d'accès rapide au temps */
+        .quick-time-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .quick-btn {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 0;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .quick-btn:active {
+            background: var(--accent-blue);
+            color: #0b0e14;
+            transform: scale(0.96);
+        }
+
         .number-input {
             width: 100%;
             background: rgba(0,0,0,0.3);
@@ -343,6 +369,7 @@
         </div>
     </div>
 
+    <!-- Mode 2 refondu avec Slider + Raccourcis tactiles -->
     <div class="card" id="form-mode2" style="display: none;">
         <div class="range-container">
             <div class="range-header">
@@ -353,8 +380,18 @@
         </div>
 
         <div class="range-container">
-            <span class="section-label">Temps de charge disponible (minutes)</span>
-            <input type="number" id="time-input" class="number-input" value="45" min="1" step="5" oninput="updateCalculations()">
+            <div class="range-header">
+                <span class="section-label">Temps disponible</span>
+                <span class="range-value" id="time-val-display">45m</span>
+            </div>
+            <input type="range" id="time-range" min="5" max="300" step="5" value="45" oninput="updateCalculations()">
+            
+            <div class="quick-time-grid">
+                <button class="quick-btn" onclick="addTime(15)">+15m</button>
+                <button class="quick-btn" onclick="addTime(30)">+30m</button>
+                <button class="quick-btn" onclick="addTime(60)">+1h</button>
+                <button class="quick-btn" onclick="addTime(120)">+2h</button>
+            </div>
         </div>
     </div>
 
@@ -458,17 +495,21 @@
             return `${h}h ${m < 10 ? '0' : ''}${m}m`;
         }
 
-        // --- NOUVELLE LOGIQUE DE CHARGE PRÉCISE (15.3 kWh) ---
+        function addTime(mins) {
+            const timeSlider = document.getElementById('time-range');
+            let currentVal = parseInt(timeSlider.value) || 0;
+            let newVal = Math.min(300, currentVal + mins);
+            timeSlider.value = newVal;
+            updateCalculations();
+        }
+
+        // --- CALCULS DU RECHARTEMENT (15.3 kWh) ---
         function getMinutesToCharge(startPct, endPct, location) {
             if (startPct >= endPct) return 0;
             
             if (location === 'maison') {
-                // 8h pour 100% = 480 minutes -> 4.8 min par 1%
-                return (endPct - startPct) * 4.8;
+                return (endPct - startPct) * 4.8; // 8h = 480m pour 100%
             } else {
-                // Borne publique
-                // Tranche 0% -> 80% : 90 minutes (1.125 min / %)
-                // Tranche 80% -> 100% : 60 minutes (3.0 min / %)
                 let minutes = 0;
                 
                 const seg1Start = Math.min(startPct, 80);
@@ -495,7 +536,6 @@
                 let currentSoc = startPct;
                 let remainingMins = availableMinutes;
 
-                // Si sous 80%, on consomme les minutes sur la tranche rapide (1.125 min/%)
                 if (currentSoc < 80) {
                     const minsTo80 = (80 - currentSoc) * 1.125;
                     if (remainingMins <= minsTo80) {
@@ -506,7 +546,6 @@
                     }
                 }
 
-                // Tranche lente au-dessus de 80% (3 min/%)
                 if (remainingMins > 0 && currentSoc >= 80) {
                     const pctGained = remainingMins / 3.0;
                     currentSoc = Math.min(100, currentSoc + pctGained);
@@ -541,7 +580,8 @@
                 const startPct = parseInt(document.getElementById('battery-range-m2').value);
                 document.getElementById('battery-val-m2').innerText = `${startPct}%`;
 
-                calculatedMinutesNeeded = parseInt(document.getElementById('time-input').value) || 0;
+                calculatedMinutesNeeded = parseInt(document.getElementById('time-range').value) || 0;
+                document.getElementById('time-val-display').innerText = formatMinutes(calculatedMinutesNeeded);
 
                 const finalPctRaw = getFinalPctAfterMinutes(startPct, calculatedMinutesNeeded, state.location);
                 const finalPct = Math.round(finalPctRaw);
