@@ -171,7 +171,6 @@
             box-shadow: 0 0 10px rgba(0, 180, 216, 0.5);
         }
 
-        /* Nouveaux boutons WAF d'accès rapide au temps */
         .quick-time-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -183,9 +182,9 @@
             background: rgba(0, 0, 0, 0.3);
             border: 1px solid var(--border-color);
             color: var(--text-primary);
-            padding: 8px 0;
+            padding: 10px 0;
             border-radius: 10px;
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 700;
             cursor: pointer;
             transition: all 0.15s ease;
@@ -369,7 +368,6 @@
         </div>
     </div>
 
-    <!-- Mode 2 refondu avec Slider + Raccourcis tactiles -->
     <div class="card" id="form-mode2" style="display: none;">
         <div class="range-container">
             <div class="range-header">
@@ -387,10 +385,10 @@
             <input type="range" id="time-range" min="5" max="300" step="5" value="45" oninput="updateCalculations()">
             
             <div class="quick-time-grid">
-                <button class="quick-btn" onclick="addTime(15)">+15m</button>
-                <button class="quick-btn" onclick="addTime(30)">+30m</button>
-                <button class="quick-btn" onclick="addTime(60)">+1h</button>
-                <button class="quick-btn" onclick="addTime(120)">+2h</button>
+                <button class="quick-btn" onclick="setTime(15)">15 min</button>
+                <button class="quick-btn" onclick="setTime(30)">30 min</button>
+                <button class="quick-btn" onclick="setTime(60)">1 h</button>
+                <button class="quick-btn" onclick="setTime(120)">2 h</button>
             </div>
         </div>
     </div>
@@ -495,15 +493,14 @@
             return `${h}h ${m < 10 ? '0' : ''}${m}m`;
         }
 
-        function addTime(mins) {
+        // Remplace directement la valeur au lieu de l'additionner
+        function setTime(mins) {
             const timeSlider = document.getElementById('time-range');
-            let currentVal = parseInt(timeSlider.value) || 0;
-            let newVal = Math.min(300, currentVal + mins);
-            timeSlider.value = newVal;
+            timeSlider.value = mins;
             updateCalculations();
         }
 
-        // --- CALCULS DU RECHARTEMENT (15.3 kWh) ---
+        // --- CALCULS DU RECHARGEMENT (15.3 kWh) ---
         function getMinutesToCharge(startPct, endPct, location) {
             if (startPct >= endPct) return 0;
             
