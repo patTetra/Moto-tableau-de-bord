@@ -1,569 +1,339 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Rezon Charge</title>
-    <style>
-        :root {
-            --bg-color: #0b0e14;
-            --card-bg: #161b26;
-            --accent-red: #e63946;
-            --accent-blue: #00b4d8;
-            --accent-green: #2ec4b6;
-            --accent-purple: #7209b7;
-            --text-primary: #ffffff;
-            --text-secondary: #94a3b8;
-            --border-color: #2e3646;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Calculateur Recharge Moto</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --accent: #38bdf8;
+      --text: #f8fafc;
+      --text-dim: #94a3b8;
+      --border: #334155;
+    }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
-        }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-primary);
-            min-height: 100vh;
-            padding: calc(env(safe-area-inset-top) + 10px) 20px calc(env(safe-area-inset-bottom) + 20px);
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 20px 12px;
+      min-height: 100vh;
+    }
 
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 6px 0;
-        }
+    .container {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
 
-        header h1 {
-            font-size: 22px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-            color: var(--text-primary);
-        }
+    header {
+      text-align: center;
+      margin-bottom: 4px;
+    }
 
-        header span {
-            color: var(--accent-red);
-        }
+    header h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
 
-        .settings-btn {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            font-size: 18px;
-            padding: 8px 12px;
-            border-radius: 12px;
-            cursor: pointer;
-        }
+    header p {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
 
-        .mode-switch {
-            background: var(--card-bg);
-            padding: 4px;
-            border-radius: 14px;
-            display: flex;
-            border: 1px solid var(--border-color);
-        }
+    .card {
+      background-color: var(--card-bg);
+      border-radius: 16px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
 
-        .mode-btn {
-            flex: 1;
-            padding: 10px;
-            border: none;
-            background: transparent;
-            color: var(--text-secondary);
-            font-weight: 600;
-            font-size: 13px;
-            border-radius: 10px;
-            transition: all 0.2s ease;
-        }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
 
-        .mode-btn.active {
-            background: var(--accent-red);
-            color: #fff;
-            box-shadow: 0 4px 12px rgba(230, 57, 70, 0.3);
-        }
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
 
-        .card {
-            background: var(--card-bg);
-            border-radius: 20px;
-            padding: 18px;
-            border: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
+    label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+    }
 
-        .section-label {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            color: var(--text-secondary);
-            font-weight: 600;
-        }
+    .slider-val {
+      color: var(--accent);
+      font-size: 1rem;
+      font-weight: 700;
+    }
 
-        .segmented {
-            display: flex;
-            background: rgba(0,0,0,0.3);
-            border-radius: 12px;
-            padding: 3px;
-            gap: 4px;
-        }
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: var(--border);
+      outline: none;
+    }
 
-        .seg-btn {
-            flex: 1;
-            padding: 10px;
-            border: none;
-            background: transparent;
-            color: var(--text-secondary);
-            font-size: 14px;
-            font-weight: 600;
-            border-radius: 9px;
-            transition: background 0.2s, color 0.2s;
-        }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+    }
 
-        .seg-btn.active {
-            background: var(--border-color);
-            color: #fff;
-        }
+    .segmented-control {
+      display: flex;
+      background: var(--bg);
+      padding: 3px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
 
-        .range-container {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
+    .segmented-control button {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      padding: 8px 0;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
 
-        .range-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-        }
+    .segmented-control button.active {
+      background: var(--accent);
+      color: var(--bg);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
 
-        .range-value {
-            font-size: 28px;
-            font-weight: 800;
-            color: var(--accent-blue);
-        }
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
 
-        input[type="range"] {
-            -webkit-appearance: none;
-            width: 100%;
-            height: 8px;
-            border-radius: 4px;
-            background: var(--border-color);
-            outline: none;
-        }
+    .result-box {
+      background: var(--bg);
+      border-radius: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      text-align: center;
+    }
 
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: var(--accent-blue);
-            box-shadow: 0 0 10px rgba(0, 180, 216, 0.5);
-        }
+    .result-box.full-width {
+      grid-column: span 2;
+    }
 
-        .number-input {
-            width: 100%;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 12px;
-            font-size: 24px;
-            font-weight: 700;
-            color: #fff;
-            text-align: center;
-            outline: none;
-            user-select: text;
-        }
+    .result-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
 
-        .result-card {
-            background: linear-gradient(135deg, rgba(230,57,70,0.15) 0%, rgba(0,180,216,0.15) 100%);
-            border: 1px solid var(--accent-red);
-            border-radius: 20px;
-            padding: 20px;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
+    .result-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+    }
 
-        .result-title {
-            font-size: 13px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
+    .result-value.accent {
+      color: var(--accent);
+    }
 
-        .result-main {
-            font-size: 38px;
-            font-weight: 900;
-            color: #fff;
-            letter-spacing: -1px;
-        }
+    .progress-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
 
-        .result-sub {
-            font-size: 14px;
-            color: #cbd5e1;
-        }
-
-        .badge {
-            display: inline-block;
-            align-self: center;
-            padding: 4px 12px;
-            border-radius: 20px;
-            background: rgba(255,255,255,0.1);
-            font-size: 12px;
-            font-weight: 600;
-            margin-top: 4px;
-        }
-
-        .action-group {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .btn-action {
-            color: #fff;
-            border: none;
-            padding: 14px;
-            border-radius: 16px;
-            font-size: 14px;
-            font-weight: 700;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .btn-calendar {
-            background: var(--accent-purple);
-            box-shadow: 0 4px 12px rgba(114, 9, 183, 0.3);
-        }
-
-        .btn-wakelock {
-            background: var(--border-color);
-            color: var(--text-secondary);
-        }
-
-        .btn-wakelock.active {
-            background: var(--accent-green);
-            color: #0b0e14;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.8);
-            backdrop-filter: blur(10px);
-            z-index: 100;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-
-        .modal-content {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            padding: 20px;
-            width: 100%;
-            max-width: 350px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .input-row {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .save-btn {
-            background: var(--accent-red);
-            color: #fff;
-            border: none;
-            padding: 12px;
-            border-radius: 12px;
-            font-size: 15px;
-            font-weight: 700;
-            cursor: pointer;
-        }
-    </style>
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+  </style>
 </head>
 <body>
 
+  <div class="container">
     <header>
-        <h1>REZON <span>BOHEMIA</span></h1>
-        <button class="settings-btn" onclick="toggleSettings(true)">⚙️</button>
+      <h1>Simulateur de Recharge</h1>
+      <p>Batterie 15,3 kWh</p>
     </header>
 
-    <div class="mode-switch">
-        <button class="mode-btn active" id="tab-mode1" onclick="switchMode(1)">Temps pour 100%</button>
-        <button class="mode-btn" id="tab-mode2" onclick="switchMode(2)">Batterie après X min</button>
+    <div class="card">
+      <div class="form-group">
+        <label for="socCurrent">
+          <span>Niveau actuel</span>
+          <span class="slider-val" id="socCurrentVal">20 %</span>
+        </label>
+        <input type="range" id="socCurrent" min="0" max="100" value="20">
+      </div>
+
+      <div class="form-group">
+        <label for="socTarget">
+          <span>Niveau ciblé</span>
+          <span class="slider-val" id="socTargetVal">80 %</span>
+        </label>
+        <input type="range" id="socTarget" min="0" max="100" value="80">
+      </div>
+
+      <div class="form-group">
+        <label>Mode de charge</label>
+        <div class="segmented-control">
+          <button id="btnBorne" class="active" onclick="setMode('borne')">Borne Publique</button>
+          <button id="btnDomicile" onclick="setMode('domicile')">Domicile (8h)</button>
+        </div>
+      </div>
     </div>
 
     <div class="card">
-        <div class="section-label">Configuration de charge</div>
-        <div class="segmented">
-            <button class="seg-btn active" id="btn-solo" onclick="setParam('passenger', 'solo')">👤 Solo (<span id="label-solo-km">170</span> km)</button>
-            <button class="seg-btn" id="btn-duo" onclick="setParam('passenger', 'duo')">👥 Duo (<span id="label-duo-km">140</span> km)</button>
+      <div class="results-grid">
+        <div class="result-box">
+          <div class="result-label">Temps estimé</div>
+          <div class="result-value accent" id="timeRes">0 h 00</div>
         </div>
-        <div class="segmented">
-            <button class="seg-btn active" id="btn-borne" onclick="setParam('location', 'borne')">⚡ Borne (2h30)</button>
-            <button class="seg-btn" id="btn-maison" onclick="setParam('location', 'maison')">🏠 Maison (4h30)</button>
+        <div class="result-box">
+          <div class="result-label">Énergie ajoutée</div>
+          <div class="result-value" id="kwhRes">0.0 kWh</div>
         </div>
-    </div>
-
-    <div class="card" id="form-mode1">
-        <div class="range-container">
-            <div class="range-header">
-                <span class="section-label">Batterie actuelle</span>
-                <span class="range-value" id="battery-val">30%</span>
-            </div>
-            <input type="range" id="battery-range" min="0" max="100" value="30" oninput="updateCalculations()">
+        <div class="result-box full-width">
+          <div class="result-label">Fin de charge estimée</div>
+          <div class="result-value" id="endTimeRes">--:--</div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressFill"></div>
+          </div>
         </div>
+      </div>
     </div>
+  </div>
 
-    <div class="card" id="form-mode2" style="display: none;">
-        <div class="range-container">
-            <div class="range-header">
-                <span class="section-label">Batterie de départ</span>
-                <span class="range-value" id="battery-val-m2">30%</span>
-            </div>
-            <input type="range" id="battery-range-m2" min="0" max="100" value="30" oninput="updateCalculations()">
-        </div>
+  <script>
+    const BATTERY_CAPACITY_KWH = 15.3;
+    let currentMode = 'borne';
 
-        <div class="range-container">
-            <span class="section-label">Temps de charge disponible (minutes)</span>
-            <input type="number" id="time-input" class="number-input" value="45" min="1" step="5" oninput="updateCalculations()">
-        </div>
-    </div>
+    const socCurrentInput = document.getElementById('socCurrent');
+    const socTargetInput = document.getElementById('socTarget');
+    const socCurrentVal = document.getElementById('socCurrentVal');
+    const socTargetVal = document.getElementById('socTargetVal');
+    const timeRes = document.getElementById('timeRes');
+    const kwhRes = document.getElementById('kwhRes');
+    const endTimeRes = document.getElementById('endTimeRes');
+    const progressFill = document.getElementById('progressFill');
 
-    <div class="result-card">
-        <div class="result-title" id="result-title">Temps de charge requis</div>
-        <div class="result-main" id="result-main">1h 45m</div>
-        <div class="result-sub" id="result-sub">Fin estimée à 16:15</div>
-        <div class="badge" id="result-badge">Autonomie : +119 km (Total 170 km)</div>
-    </div>
+    function setMode(mode) {
+      currentMode = mode;
+      document.getElementById('btnBorne').classList.toggle('active', mode === 'borne');
+      document.getElementById('btnDomicile').classList.toggle('active', mode === 'domicile');
+      calculate();
+    }
 
-    <div class="action-group">
-        <!-- Option 1: Événement Calendrier avec Alarme intégrée -->
-        <button class="btn-action btn-calendar" onclick="createICSAlarm()">
-            📅 Ajouter rappel iOS (5 min avant)
-        </button>
+    function calculateDurationMinutes(startSoc, endSoc, mode) {
+      if (startSoc >= endSoc) return 0;
 
-        <!-- Option 2: Empêcher l'iPhone de passer en veille -->
-        <button class="btn-action btn-wakelock" id="wakelock-btn" onclick="toggleWakeLock()">
-            ☀️ Maintenir l'écran allumé : OFF
-        </button>
-    </div>
+      if (mode === 'domicile') {
+        // 0 à 100% en 8h (480 minutes) -> 4.8 min par 1% de SOC
+        const minutesPerPercent = 480 / 100;
+        return (endSoc - startSoc) * minutesPerPercent;
+      } else {
+        // Borne Publique
+        // Segment 1 (0 -> 80%) : 1h30 (90 min) -> 1.125 min par 1%
+        // Segment 2 (80 -> 100%) : 1h00 (60 min) -> 3.0 min par 1%
+        let duration = 0;
 
-    <div class="modal" id="settings-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Réglages Autonomie</h2>
-                <button style="background:none;border:none;color:#fff;font-size:20px;" onclick="toggleSettings(false)">✕</button>
-            </div>
-            <div class="input-row">
-                <label style="font-size:13px;color:var(--text-secondary);">Autonomie Solo (km)</label>
-                <input type="number" id="cfg-solo" class="number-input" style="font-size: 18px; padding: 8px;" value="170">
-            </div>
-            <div class="input-row">
-                <label style="font-size:13px;color:var(--text-secondary);">Autonomie Duo (km)</label>
-                <input type="number" id="cfg-duo" class="number-input" style="font-size: 18px; padding: 8px;" value="140">
-            </div>
-            <button class="save-btn" onclick="saveSettings()">Enregistrer</button>
-        </div>
-    </div>
-
-    <script>
-        let CONFIG = {
-            range: { 
-                solo: parseInt(localStorage.getItem('rezon_solo_km')) || 170, 
-                duo: parseInt(localStorage.getItem('rezon_duo_km')) || 140 
-            },
-            chargeMinutes: { borne: 150, maison: 270 }
-        };
-
-        let state = { mode: 1, passenger: 'solo', location: 'borne' };
-        let calculatedMinutesNeeded = 0;
-        let wakeLock = null;
-
-        function toggleSettings(show) {
-            document.getElementById('settings-modal').style.display = show ? 'flex' : 'none';
-            if(show) {
-                document.getElementById('cfg-solo').value = CONFIG.range.solo;
-                document.getElementById('cfg-duo').value = CONFIG.range.duo;
-            }
+        // Partie sous 80%
+        const startSeg1 = Math.min(startSoc, 80);
+        const endSeg1 = Math.min(endSoc, 80);
+        if (endSeg1 > startSeg1) {
+          duration += (endSeg1 - startSeg1) * (90 / 80);
         }
 
-        function saveSettings() {
-            const soloVal = parseInt(document.getElementById('cfg-solo').value) || 170;
-            const duoVal = parseInt(document.getElementById('cfg-duo').value) || 140;
-            CONFIG.range.solo = soloVal;
-            CONFIG.range.duo = duoVal;
-            localStorage.setItem('rezon_solo_km', soloVal);
-            localStorage.setItem('rezon_duo_km', duoVal);
-            updateLabels();
-            updateCalculations();
-            toggleSettings(false);
+        // Partie au-dessus de 80%
+        const startSeg2 = Math.max(startSoc, 80);
+        const endSeg2 = Math.max(endSoc, 80);
+        if (endSeg2 > startSeg2) {
+          duration += (endSeg2 - startSeg2) * (60 / 20);
         }
 
-        function updateLabels() {
-            document.getElementById('label-solo-km').innerText = CONFIG.range.solo;
-            document.getElementById('label-duo-km').innerText = CONFIG.range.duo;
-        }
+        return duration;
+      }
+    }
 
-        function switchMode(newMode) {
-            state.mode = newMode;
-            document.getElementById('tab-mode1').classList.toggle('active', newMode === 1);
-            document.getElementById('tab-mode2').classList.toggle('active', newMode === 2);
-            document.getElementById('form-mode1').style.display = newMode === 1 ? 'flex' : 'none';
-            document.getElementById('form-mode2').style.display = newMode === 2 ? 'flex' : 'none';
-            updateCalculations();
-        }
+    function calculate() {
+      let current = parseInt(socCurrentInput.value);
+      let target = parseInt(socTargetInput.value);
 
-        function setParam(key, value) {
-            state[key] = value;
-            if(key === 'passenger') {
-                document.getElementById('btn-solo').classList.toggle('active', value === 'solo');
-                document.getElementById('btn-duo').classList.toggle('active', value === 'duo');
-            } else if(key === 'location') {
-                document.getElementById('btn-borne').classList.toggle('active', value === 'borne');
-                document.getElementById('btn-maison').classList.toggle('active', value === 'maison');
-            }
-            updateCalculations();
-        }
+      // Empêcher la cible d'être inférieure au niveau actuel
+      if (target < current) {
+        target = current;
+        socTargetInput.value = target;
+      }
 
-        function formatMinutes(totalMinutes) {
-            const h = Math.floor(totalMinutes / 60);
-            const m = Math.round(totalMinutes % 60);
-            if (h === 0) return `${m} min`;
-            return `${h}h ${m < 10 ? '0' : ''}${m}m`;
-        }
+      socCurrentVal.textContent = `${current} %`;
+      socTargetVal.textContent = `${target} %`;
 
-        function updateCalculations() {
-            const maxRange = CONFIG.range[state.passenger];
-            const fullChargeTime = CONFIG.chargeMinutes[state.location];
+      // 1. Durée totale en minutes
+      const totalMinutes = Math.round(calculateDurationMinutes(current, target, currentMode));
+      const hours = Math.floor(totalMinutes / 60);
+      const mins = totalMinutes % 60;
+      timeRes.textContent = `${hours} h ${mins < 10 ? '0' : ''}${mins}`;
 
-            if (state.mode === 1) {
-                const currentPct = parseInt(document.getElementById('battery-range').value);
-                document.getElementById('battery-val').innerText = `${currentPct}%`;
-                const pctToCharge = 100 - currentPct;
-                calculatedMinutesNeeded = (pctToCharge / 100) * fullChargeTime;
+      // 2. Énergie ajoutée
+      const socDiff = target - current;
+      const kwhAdded = (BATTERY_CAPACITY_KWH * (socDiff / 100)).toFixed(1);
+      kwhRes.textContent = `${kwhAdded} kWh`;
 
-                const now = new Date();
-                const endTime = new Date(now.getTime() + calculatedMinutesNeeded * 60000);
-                const endStr = endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      // 3. Heure de fin
+      const now = new Date();
+      const endTime = new Date(now.getTime() + totalMinutes * 60000);
+      const endHours = String(endTime.getHours()).padStart(2, '0');
+      const endMins = String(endTime.getMinutes()).padStart(2, '0');
+      endTimeRes.textContent = `${endHours}:${endMins}`;
 
-                const kmMissing = Math.round((pctToCharge / 100) * maxRange);
-                const currentKm = Math.round((currentPct / 100) * maxRange);
+      // Barre visuelle de progression
+      progressFill.style.width = `${target}%`;
+    }
 
-                document.getElementById('result-title').innerText = "Temps pour atteindre 100%";
-                document.getElementById('result-main').innerText = formatMinutes(calculatedMinutesNeeded);
-                document.getElementById('result-sub').innerText = currentPct === 100 ? "Batterie déjà pleine !" : `Fin estimée à ${endStr}`;
-                document.getElementById('result-badge').innerText = `Actuel : ${currentKm} km | À charger : +${kmMissing} km`;
-            } else {
-                const startPct = parseInt(document.getElementById('battery-range-m2').value);
-                document.getElementById('battery-val-m2').innerText = `${startPct}%`;
+    socCurrentInput.addEventListener('input', calculate);
+    socTargetInput.addEventListener('input', calculate);
 
-                calculatedMinutesNeeded = parseInt(document.getElementById('time-input').value) || 0;
-
-                const pctGained = (calculatedMinutesNeeded / fullChargeTime) * 100;
-                const finalPct = Math.min(100, Math.round(startPct + pctGained));
-                
-                const finalKm = Math.round((finalPct / 100) * maxRange);
-                const gainedKm = Math.round(((finalPct - startPct) / 100) * maxRange);
-
-                document.getElementById('result-title').innerText = "Niveau après la charge";
-                document.getElementById('result-main').innerText = `${finalPct}%`;
-                document.getElementById('result-sub').innerText = finalPct === 100 ? "Recharge complète !" : `Gain de +${Math.round(pctGained)}% de batterie`;
-                document.getElementById('result-badge').innerText = `Autonomie finale : ${finalKm} km (+${gainedKm} km)`;
-            }
-        }
-
-        // Création d'un fichier d'événement Calendrier ICS avec alarme -5min
-        function createICSAlarm() {
-            if (calculatedMinutesNeeded <= 0) return;
-
-            const now = new Date();
-            const endDate = new Date(now.getTime() + calculatedMinutesNeeded * 60000);
-
-            function formatDate(d) {
-                return d.toISOString().replace(/-|:|\.\d+/g, "");
-            }
-
-            const icsData = 
-`BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Rezon Bohemia//Charge Tracker//FR
-BEGIN:VEVENT
-SUMMARY:⚡ Fin de charge Rezon Bohemia
-DESCRIPTION:Votre recharge s'achève dans 5 minutes !
-DTSTART:${formatDate(now)}
-DTEND:${formatDate(endDate)}
-BEGIN:VALARM
-TRIGGER:-PT5M
-ACTION:DISPLAY
-DESCRIPTION:Fin de charge Rezon dans 5 min !
-END:VALARM
-END:VEVENT
-END:VCALENDAR`;
-
-            const blob = new Blob([icsData], { type: 'text/calendar;charset=utf-8' });
-            const link = document.createElement('a');
-            link.href = window.URL.createObjectURL(blob);
-            link.setAttribute('download', 'fin_de_charge.ics');
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        // Gestion du maintien de l'écran allumé
-        async function toggleWakeLock() {
-            const btn = document.getElementById('wakelock-btn');
-            if (!('wakeLock' in navigator)) {
-                alert("Option non supportée sur ce navigateur.");
-                return;
-            }
-
-            if (wakeLock !== null) {
-                await wakeLock.release();
-                wakeLock = null;
-                btn.classList.remove('active');
-                btn.innerText = "☀️ Maintenir l'écran allumé : OFF";
-            } else {
-                try {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                    btn.classList.add('active');
-                    btn.innerText = "☀️ Écran maintenu allumé : ON";
-                } catch (err) {
-                    console.error(err);
-                }
-            }
-        }
-
-        updateLabels();
-        updateCalculations();
-    </script>
+    // Initialisation
+    calculate();
+  </script>
 </body>
 </html>
