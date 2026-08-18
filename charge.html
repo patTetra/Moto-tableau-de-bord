@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Rezon Charge">
+    <link id="apple-touch-icon" rel="apple-touch-icon" href="">
     <title>Rezon Charge</title>
     <style>
         :root {
@@ -155,7 +157,6 @@
             transition: color 0.3s ease;
         }
 
-        /* Jauge de batterie visuelle */
         .battery-gauge-bar {
             width: 100%;
             height: 10px;
@@ -287,15 +288,27 @@
             color: #cbd5e1;
         }
 
-        .badge {
-            display: inline-block;
+        /* Badge cliquable pour basculer Solo / Duo (1.1) */
+        .badge-interactive {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
             align-self: center;
-            padding: 4px 12px;
+            padding: 6px 14px;
             border-radius: 20px;
-            background: rgba(255,255,255,0.1);
-            font-size: 12px;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.2);
+            font-size: 13px;
             font-weight: 600;
+            color: #fff;
             margin-top: 4px;
+            cursor: pointer;
+            transition: background 0.2s ease, transform 0.1s ease;
+        }
+
+        .badge-interactive:active {
+            transform: scale(0.96);
+            background: rgba(255,255,255,0.25);
         }
 
         .action-group {
@@ -321,6 +334,13 @@
         .btn-calendar {
             background: var(--accent-purple);
             box-shadow: 0 4px 12px rgba(114, 9, 183, 0.3);
+        }
+
+        /* Bouton Partage SMS / Web Share (2.1) */
+        .btn-share {
+            background: #25d366;
+            color: #0b0e14;
+            box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);
         }
 
         .modal {
@@ -384,11 +404,7 @@
     </div>
 
     <div class="card">
-        <div class="section-label">Configuration de charge</div>
-        <div class="segmented">
-            <button class="seg-btn active" id="btn-solo" onclick="setParam('passenger', 'solo')">👤 Solo (<span id="label-solo-km">170</span> km)</button>
-            <button class="seg-btn" id="btn-duo" onclick="setParam('passenger', 'duo')">👥 Duo (<span id="label-duo-km">140</span> km)</button>
-        </div>
+        <div class="section-label">Lieu de charge</div>
         <div class="segmented">
             <button class="seg-btn active" id="btn-borne" onclick="setParam('location', 'borne')">⚡ Borne (2h30)</button>
             <button class="seg-btn" id="btn-maison" onclick="setParam('location', 'maison')">🏠 Maison (8h)</button>
@@ -445,12 +461,18 @@
         <div class="result-title" id="result-title">Temps de charge requis</div>
         <div class="result-main" id="result-main">1h 45m</div>
         <div class="result-sub" id="result-sub">Fin estimée à 16:15</div>
-        <div class="badge" id="result-badge">Autonomie : +119 km (Total 170 km)</div>
+        <div class="badge-interactive" id="result-badge" onclick="togglePassengerMode()">
+            <span id="badge-icon">👤</span> <span id="badge-text">Solo : 170 km</span> 🔄
+        </div>
     </div>
 
     <div class="action-group">
         <button class="btn-action btn-calendar" onclick="createICSAlarm()">
             📅 Rappel iOS (5 min avant)
+        </button>
+
+        <button class="btn-action btn-share" onclick="shareChargingStatus()">
+            💬 Partager l'heure de fin
         </button>
     </div>
 
@@ -490,6 +512,38 @@
         };
 
         let calculatedMinutesNeeded = 0;
+        let lastEndFormatted = "";
+        let lastTargetPct = 100;
+        let lastGainedKm = 0;
+
+        // Génération d'une icône Apple Touch dynamique via Canvas (3.2)
+        function generateAppleTouchIcon() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 180;
+            canvas.height = 180;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#0b0e14';
+            ctx.fillRect(0, 0, 180, 180);
+
+            ctx.fillStyle = '#161b26';
+            ctx.beginPath();
+            ctx.arc(90, 90, 75, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#e63946';
+            ctx.beginPath();
+            ctx.moveTo(100, 25);
+            ctx.lineTo(45, 100);
+            ctx.lineTo(85, 100);
+            ctx.lineTo(80, 155);
+            ctx.lineTo(135, 80);
+            ctx.lineTo(95, 80);
+            ctx.closePath();
+            ctx.fill();
+
+            document.getElementById('apple-touch-icon').href = canvas.toDataURL('image/png');
+        }
 
         function toggleSettings(show) {
             document.getElementById('settings-modal').style.display = show ? 'flex' : 'none';
@@ -506,14 +560,8 @@
             CONFIG.range.duo = duoVal;
             localStorage.setItem('rezon_solo_km', soloVal);
             localStorage.setItem('rezon_duo_km', duoVal);
-            updateLabels();
             updateCalculations();
             toggleSettings(false);
-        }
-
-        function updateLabels() {
-            document.getElementById('label-solo-km').innerText = CONFIG.range.solo;
-            document.getElementById('label-duo-km').innerText = CONFIG.range.duo;
         }
 
         function restoreUIState() {
@@ -521,9 +569,6 @@
             document.getElementById('tab-mode2').classList.toggle('active', state.mode === 2);
             document.getElementById('form-mode1').style.display = state.mode === 1 ? 'flex' : 'none';
             document.getElementById('form-mode2').style.display = state.mode === 2 ? 'flex' : 'none';
-
-            document.getElementById('btn-solo').classList.toggle('active', state.passenger === 'solo');
-            document.getElementById('btn-duo').classList.toggle('active', state.passenger === 'duo');
 
             document.getElementById('btn-borne').classList.toggle('active', state.location === 'borne');
             document.getElementById('btn-maison').classList.toggle('active', state.location === 'maison');
@@ -542,9 +587,15 @@
 
         function setParam(key, value) {
             state[key] = value;
-            if(key === 'passenger') localStorage.setItem('rezon_last_passenger', value);
             if(key === 'location') localStorage.setItem('rezon_last_location', value);
             restoreUIState();
+            updateCalculations();
+        }
+
+        // Bascule rapide Solo / Duo en tapant sur le badge (1.1)
+        function togglePassengerMode() {
+            state.passenger = state.passenger === 'solo' ? 'duo' : 'solo';
+            localStorage.setItem('rezon_last_passenger', state.passenger);
             updateCalculations();
         }
 
@@ -631,6 +682,7 @@
 
         function updateCalculations() {
             const maxRange = CONFIG.range[state.passenger];
+            const isSolo = state.passenger === 'solo';
 
             if (state.mode === 1) {
                 const currentPct = parseInt(document.getElementById('battery-range').value);
@@ -642,16 +694,18 @@
 
                 const now = new Date();
                 const endTime = new Date(now.getTime() + calculatedMinutesNeeded * 60000);
-                const endStr = endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                lastEndFormatted = endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                 const pctToCharge = 100 - currentPct;
-                const kmMissing = Math.round((pctToCharge / 100) * maxRange);
-                const currentKm = Math.round((currentPct / 100) * maxRange);
+                lastGainedKm = Math.round((pctToCharge / 100) * maxRange);
+                lastTargetPct = 100;
 
                 document.getElementById('result-title').innerText = "Temps pour atteindre 100%";
                 document.getElementById('result-main').innerText = formatMinutes(calculatedMinutesNeeded);
-                document.getElementById('result-sub').innerText = currentPct === 100 ? "Batterie déjà pleine !" : `Fin estimée à ${endStr}`;
-                document.getElementById('result-badge').innerText = `Actuel : ${currentKm} km | À charger : +${kmMissing} km`;
+                document.getElementById('result-sub').innerText = currentPct === 100 ? "Batterie déjà pleine !" : `Fin estimée à ${lastEndFormatted}`;
+                
+                document.getElementById('badge-icon').innerText = isSolo ? "👤" : "👥";
+                document.getElementById('badge-text').innerText = `${isSolo ? "Solo" : "Duo"} : +${lastGainedKm} km (Total ${maxRange} km)`;
             } else {
                 const startPct = parseInt(document.getElementById('battery-range-m2').value);
                 localStorage.setItem('rezon_bat_m2', startPct);
@@ -667,16 +721,40 @@
                 const pctGained = Math.max(0, finalPct - startPct);
 
                 const finalKm = Math.round((finalPct / 100) * maxRange);
-                const gainedKm = Math.round((pctGained / 100) * maxRange);
+                lastGainedKm = Math.round((pctGained / 100) * maxRange);
+                lastTargetPct = finalPct;
 
                 const now = new Date();
                 const endTime = new Date(now.getTime() + calculatedMinutesNeeded * 60000);
-                const endStr = endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                lastEndFormatted = endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                 document.getElementById('result-title').innerText = "Niveau après la charge";
                 document.getElementById('result-main').innerText = `${finalPct}%`;
-                document.getElementById('result-sub').innerText = `Prête à ${endStr} (+${pctGained}% de batterie)`;
-                document.getElementById('result-badge').innerText = `Autonomie finale : ${finalKm} km (+${gainedKm} km)`;
+                document.getElementById('result-sub').innerText = `Prête à ${lastEndFormatted} (+${pctGained}% de batterie)`;
+                
+                document.getElementById('badge-icon').innerText = isSolo ? "👤" : "👥";
+                document.getElementById('badge-text').innerText = `${isSolo ? "Solo" : "Duo"} : ${finalKm} km (+${lastGainedKm} km)`;
+            }
+        }
+
+        // Partage rapide SMS / WhatsApp (2.1)
+        async function shareChargingStatus() {
+            if (calculatedMinutesNeeded <= 0) return;
+
+            const text = `⚡ Rezon en charge : ${lastTargetPct}% prévus à ${lastEndFormatted} (+${lastGainedKm} km).`;
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: 'Fin de charge Rezon',
+                        text: text
+                    });
+                } catch (err) {
+                    console.log('Partage annulé ou non disponible');
+                }
+            } else {
+                // Secours : Ouverture application SMS native
+                window.location.href = `sms:?&body=${encodeURIComponent(text)}`;
             }
         }
 
@@ -714,7 +792,7 @@ END:VCALENDAR`;
             window.location.href = encodedUri;
         }
 
-        updateLabels();
+        generateAppleTouchIcon();
         restoreUIState();
         updateCalculations();
     </script>
