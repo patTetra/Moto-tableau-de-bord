@@ -18,6 +18,7 @@
             --text-primary: #ffffff;
             --text-secondary: #94a3b8;
             --border-color: #2e3646;
+            --battery-color: var(--accent-green);
         }
 
         * {
@@ -154,6 +155,24 @@
             transition: color 0.3s ease;
         }
 
+        /* Jauge de batterie visuelle */
+        .battery-gauge-bar {
+            width: 100%;
+            height: 10px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .battery-gauge-fill {
+            height: 100%;
+            width: 30%;
+            background: var(--battery-color);
+            border-radius: 4px;
+            transition: width 0.2s ease, background-color 0.3s ease;
+        }
+
         .slider-with-controls {
             display: flex;
             align-items: center;
@@ -246,6 +265,7 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
+            transition: border-color 0.3s ease;
         }
 
         .result-title {
@@ -287,9 +307,9 @@
         .btn-action {
             color: #fff;
             border: none;
-            padding: 14px;
+            padding: 16px;
             border-radius: 16px;
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 700;
             cursor: pointer;
             display: flex;
@@ -301,16 +321,6 @@
         .btn-calendar {
             background: var(--accent-purple);
             box-shadow: 0 4px 12px rgba(114, 9, 183, 0.3);
-        }
-
-        .btn-wakelock {
-            background: var(--border-color);
-            color: var(--text-secondary);
-        }
-
-        .btn-wakelock.active {
-            background: var(--accent-green);
-            color: #0b0e14;
         }
 
         .modal {
@@ -391,6 +401,9 @@
                 <span class="section-label">Batterie actuelle</span>
                 <span class="range-value" id="battery-val">30%</span>
             </div>
+            <div class="battery-gauge-bar">
+                <div class="battery-gauge-fill" id="gauge-m1"></div>
+            </div>
             <input type="range" id="battery-range" min="0" max="100" value="30" oninput="updateCalculations()">
         </div>
     </div>
@@ -400,6 +413,9 @@
             <div class="range-header">
                 <span class="section-label">Batterie de départ</span>
                 <span class="range-value" id="battery-val-m2">30%</span>
+            </div>
+            <div class="battery-gauge-bar">
+                <div class="battery-gauge-fill" id="gauge-m2"></div>
             </div>
             <input type="range" id="battery-range-m2" min="0" max="100" value="30" oninput="updateCalculations()">
         </div>
@@ -425,7 +441,7 @@
         </div>
     </div>
 
-    <div class="result-card">
+    <div class="result-card" id="result-card">
         <div class="result-title" id="result-title">Temps de charge requis</div>
         <div class="result-main" id="result-main">1h 45m</div>
         <div class="result-sub" id="result-sub">Fin estimée à 16:15</div>
@@ -434,11 +450,7 @@
 
     <div class="action-group">
         <button class="btn-action btn-calendar" onclick="createICSAlarm()">
-            📅 Ajouter rappel iOS (5 min avant)
-        </button>
-
-        <button class="btn-action btn-wakelock" id="wakelock-btn" onclick="toggleWakeLock()">
-            ☀️ Maintenir l'écran allumé : OFF
+            📅 Rappel iOS (5 min avant)
         </button>
     </div>
 
@@ -471,11 +483,13 @@
         let state = { 
             mode: parseInt(localStorage.getItem('rezon_last_mode')) || 1, 
             passenger: localStorage.getItem('rezon_last_passenger') || 'solo', 
-            location: localStorage.getItem('rezon_last_location') || 'borne' 
+            location: localStorage.getItem('rezon_last_location') || 'borne',
+            batM1: parseInt(localStorage.getItem('rezon_bat_m1')) || 30,
+            batM2: parseInt(localStorage.getItem('rezon_bat_m2')) || 30,
+            timeM2: parseInt(localStorage.getItem('rezon_time_m2')) || 45
         };
 
         let calculatedMinutesNeeded = 0;
-        let wakeLock = null;
 
         function toggleSettings(show) {
             document.getElementById('settings-modal').style.display = show ? 'flex' : 'none';
@@ -513,6 +527,10 @@
 
             document.getElementById('btn-borne').classList.toggle('active', state.location === 'borne');
             document.getElementById('btn-maison').classList.toggle('active', state.location === 'maison');
+
+            document.getElementById('battery-range').value = state.batM1;
+            document.getElementById('battery-range-m2').value = state.batM2;
+            document.getElementById('time-range').value = state.timeM2;
         }
 
         function switchMode(newMode) {
@@ -551,15 +569,19 @@
             updateCalculations();
         }
 
-        function applyBatteryColor(elementId, val) {
+        function applyBatteryColor(elementId, gaugeId, val) {
             const el = document.getElementById(elementId);
-            if (val < 20) {
-                el.style.color = "var(--accent-red)";
-            } else if (val <= 50) {
-                el.style.color = "var(--accent-yellow)";
-            } else {
-                el.style.color = "var(--accent-green)";
-            }
+            const gauge = document.getElementById(gaugeId);
+            const resCard = document.getElementById('result-card');
+            
+            let color = "var(--accent-green)";
+            if (val < 20) color = "var(--accent-red)";
+            else if (val <= 50) color = "var(--accent-yellow)";
+
+            el.style.color = color;
+            gauge.style.backgroundColor = color;
+            gauge.style.width = `${val}%`;
+            resCard.style.borderColor = color;
         }
 
         function getMinutesToCharge(startPct, endPct, location) {
@@ -612,8 +634,9 @@
 
             if (state.mode === 1) {
                 const currentPct = parseInt(document.getElementById('battery-range').value);
+                localStorage.setItem('rezon_bat_m1', currentPct);
                 document.getElementById('battery-val').innerText = `${currentPct}%`;
-                applyBatteryColor('battery-val', currentPct);
+                applyBatteryColor('battery-val', 'gauge-m1', currentPct);
                 
                 calculatedMinutesNeeded = getMinutesToCharge(currentPct, 100, state.location);
 
@@ -631,10 +654,12 @@
                 document.getElementById('result-badge').innerText = `Actuel : ${currentKm} km | À charger : +${kmMissing} km`;
             } else {
                 const startPct = parseInt(document.getElementById('battery-range-m2').value);
+                localStorage.setItem('rezon_bat_m2', startPct);
                 document.getElementById('battery-val-m2').innerText = `${startPct}%`;
-                applyBatteryColor('battery-val-m2', startPct);
+                applyBatteryColor('battery-val-m2', 'gauge-m2', startPct);
 
                 calculatedMinutesNeeded = parseInt(document.getElementById('time-range').value) || 0;
+                localStorage.setItem('rezon_time_m2', calculatedMinutesNeeded);
                 document.getElementById('time-val-display').innerText = formatMinutes(calculatedMinutesNeeded);
 
                 const finalPctRaw = getFinalPctAfterMinutes(startPct, calculatedMinutesNeeded, state.location);
@@ -655,14 +680,11 @@
             }
         }
 
-        // Nouvelle méthode optimisée pour Safari iOS
         function createICSAlarm() {
             if (calculatedMinutesNeeded <= 0) return;
 
             const now = new Date();
             const endChargeDate = new Date(now.getTime() + calculatedMinutesNeeded * 60000);
-            
-            // Déclenchement de l'événement 5 minutes avant la fin
             const alarmDate = new Date(endChargeDate.getTime() - 5 * 60000);
 
             function formatDate(d) {
@@ -690,29 +712,6 @@ END:VCALENDAR`;
 
             const encodedUri = "data:text/calendar;charset=utf8," + encodeURIComponent(icsData);
             window.location.href = encodedUri;
-        }
-
-        async function toggleWakeLock() {
-            const btn = document.getElementById('wakelock-btn');
-            if (!('wakeLock' in navigator)) {
-                alert("Option non supportée sur ce navigateur.");
-                return;
-            }
-
-            if (wakeLock !== null) {
-                await wakeLock.release();
-                wakeLock = null;
-                btn.classList.remove('active');
-                btn.innerText = "☀️ Maintenir l'écran allumé : OFF";
-            } else {
-                try {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                    btn.classList.add('active');
-                    btn.innerText = "☀️ Écran maintenu allumé : ON";
-                } catch (err) {
-                    console.error(err);
-                }
-            }
         }
 
         updateLabels();
