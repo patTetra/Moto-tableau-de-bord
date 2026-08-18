@@ -288,7 +288,6 @@
             color: #cbd5e1;
         }
 
-        /* Badge cliquable pour basculer Solo / Duo (1.1) */
         .badge-interactive {
             display: inline-flex;
             align-items: center;
@@ -336,7 +335,6 @@
             box-shadow: 0 4px 12px rgba(114, 9, 183, 0.3);
         }
 
-        /* Bouton Partage SMS / Web Share (2.1) */
         .btn-share {
             background: #25d366;
             color: #0b0e14;
@@ -361,10 +359,12 @@
             border-radius: 20px;
             padding: 20px;
             width: 100%;
-            max-width: 350px;
+            max-width: 380px;
+            max-height: 85vh;
             display: flex;
             flex-direction: column;
             gap: 16px;
+            overflow-y: auto;
         }
 
         .modal-header {
@@ -387,6 +387,61 @@
             border-radius: 12px;
             font-size: 15px;
             font-weight: 700;
+            cursor: pointer;
+        }
+
+        /* Styles de l'historique dans la modale (2.2) */
+        .history-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 14px;
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .history-item-details {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .history-item-time {
+            color: var(--text-secondary);
+            font-size: 11px;
+        }
+
+        .btn-clear-history {
+            background: transparent;
+            border: none;
+            color: var(--accent-red);
+            font-size: 12px;
+            font-weight: 600;
             cursor: pointer;
         }
     </style>
@@ -482,15 +537,29 @@
                 <h2>Réglages Autonomie</h2>
                 <button style="background:none;border:none;color:#fff;font-size:20px;" onclick="toggleSettings(false)">✕</button>
             </div>
+
             <div class="input-row">
                 <label style="font-size:13px;color:var(--text-secondary);">Autonomie Solo (km)</label>
                 <input type="number" id="cfg-solo" class="number-input" style="font-size: 18px; padding: 8px;" value="170">
             </div>
+
             <div class="input-row">
                 <label style="font-size:13px;color:var(--text-secondary);">Autonomie Duo (km)</label>
                 <input type="number" id="cfg-duo" class="number-input" style="font-size: 18px; padding: 8px;" value="140">
             </div>
+
             <button class="save-btn" onclick="saveSettings()">Enregistrer</button>
+
+            <!-- Section Historique complète dans les réglages (2.2) -->
+            <div class="history-section">
+                <div class="history-header">
+                    <span class="section-label">Historique des simulations</span>
+                    <button class="btn-clear-history" onclick="clearHistory()">Vider</button>
+                </div>
+                <div class="history-list" id="history-container">
+                    <!-- Généré dynamiquement en JS -->
+                </div>
+            </div>
         </div>
     </div>
 
@@ -516,7 +585,6 @@
         let lastTargetPct = 100;
         let lastGainedKm = 0;
 
-        // Génération d'une icône Apple Touch dynamique via Canvas (3.2)
         function generateAppleTouchIcon() {
             const canvas = document.createElement('canvas');
             canvas.width = 180;
@@ -550,6 +618,7 @@
             if(show) {
                 document.getElementById('cfg-solo').value = CONFIG.range.solo;
                 document.getElementById('cfg-duo').value = CONFIG.range.duo;
+                renderHistory();
             }
         }
 
@@ -592,7 +661,6 @@
             updateCalculations();
         }
 
-        // Bascule rapide Solo / Duo en tapant sur le badge (1.1)
         function togglePassengerMode() {
             state.passenger = state.passenger === 'solo' ? 'duo' : 'solo';
             localStorage.setItem('rezon_last_passenger', state.passenger);
@@ -680,9 +748,53 @@
             }
         }
 
+        /* Enregistrement de la simulation dans l'historique (2.2) */
+        function recordHistoryEntry(entry) {
+            let history = JSON.parse(localStorage.getItem('rezon_history')) || [];
+            
+            // Éviter les doublons successifs identiques
+            if (history.length > 0) {
+                const last = history[0];
+                if (last.mode === entry.mode && last.startPct === entry.startPct && last.endPct === entry.endPct && last.location === entry.location) {
+                    return;
+                }
+            }
+
+            history.unshift(entry);
+            if (history.length > 50) history.pop(); // Conserver jusqu'à 50 entrées
+            localStorage.setItem('rezon_history', JSON.stringify(history));
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('history-container');
+            const history = JSON.parse(localStorage.getItem('rezon_history')) || [];
+
+            if (history.length === 0) {
+                container.innerHTML = '<div style="color:var(--text-secondary);font-size:12px;text-align:center;padding:10px;">Aucune simulation enregistrée.</div>';
+                return;
+            }
+
+            container.innerHTML = history.map(item => `
+                <div class="history-item">
+                    <div class="history-item-details">
+                        <strong>${item.mode === 1 ? '100% Requis' : 'Temps Fixe'} (${item.location === 'borne' ? '⚡ Borne' : '🏠 Maison'})</strong>
+                        <span>${item.startPct}% ➔ ${item.endPct}% (${formatMinutes(item.duration)})</span>
+                    </div>
+                    <div class="history-item-time">${item.timestamp}</div>
+                </div>
+            `).join('');
+        }
+
+        function clearHistory() {
+            localStorage.removeItem('rezon_history');
+            renderHistory();
+        }
+
         function updateCalculations() {
             const maxRange = CONFIG.range[state.passenger];
             const isSolo = state.passenger === 'solo';
+            const timeNow = new Date();
+            const dateFormatted = timeNow.toLocaleDateString([], { day: '2-digit', month: '2-digit' }) + ' ' + timeNow.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             if (state.mode === 1) {
                 const currentPct = parseInt(document.getElementById('battery-range').value);
@@ -692,8 +804,7 @@
                 
                 calculatedMinutesNeeded = getMinutesToCharge(currentPct, 100, state.location);
 
-                const now = new Date();
-                const endTime = new Date(now.getTime() + calculatedMinutesNeeded * 60000);
+                const endTime = new Date(timeNow.getTime() + calculatedMinutesNeeded * 60000);
                 lastEndFormatted = endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                 const pctToCharge = 100 - currentPct;
@@ -706,6 +817,16 @@
                 
                 document.getElementById('badge-icon').innerText = isSolo ? "👤" : "👥";
                 document.getElementById('badge-text').innerText = `${isSolo ? "Solo" : "Duo"} : +${lastGainedKm} km (Total ${maxRange} km)`;
+
+                recordHistoryEntry({
+                    timestamp: dateFormatted,
+                    mode: 1,
+                    location: state.location,
+                    startPct: currentPct,
+                    endPct: 100,
+                    duration: calculatedMinutesNeeded
+                });
+
             } else {
                 const startPct = parseInt(document.getElementById('battery-range-m2').value);
                 localStorage.setItem('rezon_bat_m2', startPct);
@@ -724,8 +845,7 @@
                 lastGainedKm = Math.round((pctGained / 100) * maxRange);
                 lastTargetPct = finalPct;
 
-                const now = new Date();
-                const endTime = new Date(now.getTime() + calculatedMinutesNeeded * 60000);
+                const endTime = new Date(timeNow.getTime() + calculatedMinutesNeeded * 60000);
                 lastEndFormatted = endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                 document.getElementById('result-title').innerText = "Niveau après la charge";
@@ -734,10 +854,18 @@
                 
                 document.getElementById('badge-icon').innerText = isSolo ? "👤" : "👥";
                 document.getElementById('badge-text').innerText = `${isSolo ? "Solo" : "Duo"} : ${finalKm} km (+${lastGainedKm} km)`;
+
+                recordHistoryEntry({
+                    timestamp: dateFormatted,
+                    mode: 2,
+                    location: state.location,
+                    startPct: startPct,
+                    endPct: finalPct,
+                    duration: calculatedMinutesNeeded
+                });
             }
         }
 
-        // Partage rapide SMS / WhatsApp (2.1)
         async function shareChargingStatus() {
             if (calculatedMinutesNeeded <= 0) return;
 
@@ -753,7 +881,6 @@
                     console.log('Partage annulé ou non disponible');
                 }
             } else {
-                // Secours : Ouverture application SMS native
                 window.location.href = `sms:?&body=${encodeURIComponent(text)}`;
             }
         }
