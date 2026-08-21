@@ -463,6 +463,35 @@
             box-shadow: 0 0 10px rgba(0, 180, 216, 0.5);
         }
 
+        .time-input-field {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 700;
+            outline: none;
+            color-scheme: dark;
+            flex: 1;
+        }
+
+        .btn-shortcut {
+            padding: 10px 16px;
+            background-color: var(--accent-blue);
+            color: #0b0e14;
+            border: none;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 0.9rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .btn-shortcut:active {
+            opacity: 0.8;
+        }
+
         .quick-time-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -812,23 +841,16 @@
             </div>
         </div>
 
-        <!-- BLOC DEPART DIFFÉRÉ (AJOUTÉ) -->
+        <!-- BLOC DÉPART DIFFÉRÉ SANS SLIDER (HEURE DE DÉPART) -->
         <div class="card">
             <div class="range-container">
                 <div class="range-header">
-                    <span class="section-label">⏱️ Départ différé</span>
+                    <span class="section-label">⏱️ Heure de départ différé</span>
                     <span class="range-value" style="color: var(--accent-yellow)" id="delay-val-display">Immédiat</span>
                 </div>
                 <div class="slider-with-controls">
-                    <button class="btn-step" onclick="stepDelay(-30)">−</button>
-                    <input type="range" id="delay-range" min="0" max="720" step="30" value="0" oninput="updateCalculations()">
-                    <button class="btn-step" onclick="stepDelay(30)">+</button>
-                </div>
-                <div class="quick-time-grid">
-                    <button class="quick-btn" onclick="setDelay(0)">Direct</button>
-                    <button class="quick-btn" onclick="setDelay(60)">+1 h</button>
-                    <button class="quick-btn" onclick="setDelay(120)">+2 h</button>
-                    <button class="quick-btn" onclick="setDelay(240)">+4 h</button>
+                    <input type="time" id="deferred-time" class="time-input-field" onchange="updateCalculations()">
+                    <button type="button" id="btn-22h" class="btn-shortcut">22 h 00</button>
                 </div>
             </div>
         </div>
@@ -943,7 +965,7 @@
             batM1: parseInt(localStorage.getItem('rezon_bat_m1')) || 30,
             batM2: parseInt(localStorage.getItem('rezon_bat_m2')) || 30,
             timeM2: parseInt(localStorage.getItem('rezon_time_m2')) || 45,
-            delayMins: parseInt(localStorage.getItem('rezon_delay_mins')) || 0
+            deferredTimeStr: localStorage.getItem('rezon_deferred_time') || ""
         };
 
         let calculatedMinutesNeeded = 0;
@@ -1225,6 +1247,7 @@
                     if (batteryPercent > 0 && batteryPercent <= 100) {
                         currentRange = batteryPercent;
                         document.getElementById('battery-range').value = batteryPercent;
+                        document.getElementById('battery-range-m2').value = batteryPercent;
                         updateDashUI(Math.round(document.getElementById('speed').innerText), totalDistance); updateCalculations();
                     }
                 });
@@ -1373,29 +1396,45 @@
         }
 
         function switchChargeMode(newMode) {
-            chargeState.mode = newMode; localStorage.setItem('rezon_last_mode', newMode);
-            restoreChargeUIState(); updateCalculations();
+            // Mémorisation explicite des valeurs de batterie avant bascule
+            const currentM1 = document.getElementById('battery-range').value;
+            const currentM2 = document.getElementById('battery-range-m2').value;
+
+            chargeState.mode = newMode; 
+            localStorage.setItem('rezon_last_mode', newMode);
+            
+            restoreChargeUIState();
+
+            // Conservation et synchronisation explicite des pourcentages
+            if (newMode === 1) {
+                document.getElementById('battery-range').value = chargeState.batM1;
+            } else {
+                document.getElementById('battery-range-m2').value = chargeState.batM2;
+            }
+
+            updateCalculations();
         }
 
         function setChargeParam(key, value) {
+            // Sauvegarde de l'état des batteries pour ne jamais réinitialiser lors d'un changement de lieu
+            const savedM1 = document.getElementById('battery-range').value;
+            const savedM2 = document.getElementById('battery-range-m2').value;
+
             chargeState[key] = value;
             if (key === 'location') localStorage.setItem('rezon_last_location', value);
-            restoreChargeUIState(); updateCalculations();
+            
+            restoreChargeUIState();
+
+            // Réinjection des valeurs mémorisées
+            document.getElementById('battery-range').value = savedM1;
+            document.getElementById('battery-range-m2').value = savedM2;
+
+            updateCalculations();
         }
 
         function togglePassengerMode() {
             chargeState.passenger = chargeState.passenger === 'solo' ? 'duo' : 'solo';
             localStorage.setItem('rezon_last_passenger', chargeState.passenger); updateCalculations();
-        }
-
-        function setDelay(mins) {
-            document.getElementById('delay-range').value = mins; updateCalculations();
-        }
-
-        function stepDelay(delta) {
-            const slider = document.getElementById('delay-range');
-            slider.value = Math.max(0, Math.min(720, (parseInt(slider.value) || 0) + delta));
-            updateCalculations();
         }
 
         function restoreChargeUIState() {
@@ -1410,7 +1449,7 @@
             document.getElementById('battery-range').value = chargeState.batM1;
             document.getElementById('battery-range-m2').value = chargeState.batM2;
             document.getElementById('time-range').value = chargeState.timeM2;
-            document.getElementById('delay-range').value = chargeState.delayMins;
+            document.getElementById('deferred-time').value = chargeState.deferredTimeStr;
         }
 
         function formatMinutes(totalMinutes) {
@@ -1463,7 +1502,7 @@
 
         function recordHistoryEntry(entry) {
             let history = JSON.parse(localStorage.getItem('rezon_history')) || [];
-            if (history.length > 0 && history[0].mode === entry.mode && history[0].startPct === entry.startPct && history[0].endPct === entry.endPct && history[0].location === entry.location && history[0].delay === entry.delay) return;
+            if (history.length > 0 && history[0].mode === entry.mode && history[0].startPct === entry.startPct && history[0].endPct === entry.endPct && history[0].location === entry.location && history[0].deferredStr === entry.deferredStr) return;
             history.unshift(entry); if (history.length > 30) history.pop();
             localStorage.setItem('rezon_history', JSON.stringify(history));
         }
@@ -1478,7 +1517,7 @@
                 <div class="history-item">
                     <div>
                         <strong>${item.mode === 1 ? '100% Requis' : 'Temps Fixe'} (${item.location === 'borne' ? '⚡ Borne' : '🏠 Maison'})</strong><br>
-                        <span style="color:var(--text-secondary);">${item.startPct}% ➔ ${item.endPct}% (${formatMinutes(item.duration)})${item.delay > 0 ? ' [Différé ' + formatMinutes(item.delay) + ']' : ''}</span>
+                        <span style="color:var(--text-secondary);">${item.startPct}% ➔ ${item.endPct}% (${formatMinutes(item.duration)})${item.deferredStr ? ' [Départ ' + item.deferredStr + ']' : ''}</span>
                     </div>
                     <div style="color:var(--text-secondary); font-size:10px;">${item.timestamp}</div>
                 </div>
@@ -1491,18 +1530,37 @@
             const maxRange = CONFIG.range[chargeState.passenger], isSolo = chargeState.passenger === 'solo', timeNow = new Date();
             const dateFormatted = timeNow.toLocaleDateString([], { day: '2-digit', month: '2-digit' }) + ' ' + timeNow.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            chargeState.delayMins = parseInt(document.getElementById('delay-range').value) || 0;
-            localStorage.setItem('rezon_delay_mins', chargeState.delayMins);
+            // Gestion du départ différé par Heure
+            const deferredInput = document.getElementById('deferred-time');
+            chargeState.deferredTimeStr = deferredInput.value;
+            localStorage.setItem('rezon_deferred_time', chargeState.deferredTimeStr);
+
+            let startTime = new Date(timeNow.getTime());
+            let delayMinsComputed = 0;
+
+            if (chargeState.deferredTimeStr) {
+                const [defH, defM] = chargeState.deferredTimeStr.split(':').map(Number);
+                let targetDate = new Date(timeNow.getTime());
+                targetDate.setHours(defH, defM, 0, 0);
+                if (targetDate < timeNow) {
+                    targetDate.setDate(targetDate.getDate() + 1);
+                }
+                startTime = targetDate;
+                delayMinsComputed = Math.round((startTime.getTime() - timeNow.getTime()) / 60000);
+            }
 
             const delayDisp = document.getElementById('delay-val-display');
-            if (chargeState.delayMins === 0) delayDisp.innerText = "Immédiat";
-            else delayDisp.innerText = `+${formatMinutes(chargeState.delayMins)}`;
+            if (!chargeState.deferredTimeStr || delayMinsComputed <= 0) {
+                delayDisp.innerText = "Immédiat";
+            } else {
+                delayDisp.innerText = `${chargeState.deferredTimeStr} (+${formatMinutes(delayMinsComputed)})`;
+            }
 
-            const startTime = new Date(timeNow.getTime() + chargeState.delayMins * 60000);
             lastStartFormatted = startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             if (chargeState.mode === 1) {
                 const currentPct = parseInt(document.getElementById('battery-range').value);
+                chargeState.batM1 = currentPct;
                 localStorage.setItem('rezon_bat_m1', currentPct);
                 document.getElementById('battery-val').innerText = `${currentPct}%`;
                 applyBatteryColor('battery-val', 'gauge-m1', currentPct);
@@ -1519,7 +1577,7 @@
                 
                 if (currentPct === 100) {
                     document.getElementById('result-sub').innerText = "Batterie déjà pleine !";
-                } else if (chargeState.delayMins > 0) {
+                } else if (chargeState.deferredTimeStr) {
                     document.getElementById('result-sub').innerText = `Départ à ${lastStartFormatted} ➔ Fin à ${lastEndFormatted}`;
                 } else {
                     document.getElementById('result-sub').innerText = `Fin estimée à ${lastEndFormatted}`;
@@ -1528,9 +1586,10 @@
                 document.getElementById('badge-icon').innerText = isSolo ? "👤" : "👥";
                 document.getElementById('badge-text').innerText = `${isSolo ? "Solo" : "Duo"} : +${lastGainedKm} km (Total ${maxRange} km)`;
 
-                recordHistoryEntry({ timestamp: dateFormatted, mode: 1, location: chargeState.location, startPct: currentPct, endPct: 100, duration: calculatedMinutesNeeded, delay: chargeState.delayMins });
+                recordHistoryEntry({ timestamp: dateFormatted, mode: 1, location: chargeState.location, startPct: currentPct, endPct: 100, duration: calculatedMinutesNeeded, deferredStr: chargeState.deferredTimeStr });
             } else {
                 const startPct = parseInt(document.getElementById('battery-range-m2').value);
+                chargeState.batM2 = startPct;
                 localStorage.setItem('rezon_bat_m2', startPct);
                 document.getElementById('battery-val-m2').innerText = `${startPct}%`;
                 applyBatteryColor('battery-val-m2', 'gauge-m2', startPct);
@@ -1551,7 +1610,7 @@
                 document.getElementById('result-title').innerText = "Niveau après la charge";
                 document.getElementById('result-main').innerText = `${finalPct}%`;
                 
-                if (chargeState.delayMins > 0) {
+                if (chargeState.deferredTimeStr) {
                     document.getElementById('result-sub').innerText = `Charge de ${lastStartFormatted} à ${lastEndFormatted} (+${pctGained}%)`;
                 } else {
                     document.getElementById('result-sub').innerText = `Prête à ${lastEndFormatted} (+${pctGained}% de batterie)`;
@@ -1560,14 +1619,14 @@
                 document.getElementById('badge-icon').innerText = isSolo ? "👤" : "👥";
                 document.getElementById('badge-text').innerText = `${isSolo ? "Solo" : "Duo"} : ${Math.round((finalPct/100)*maxRange)} km (+${lastGainedKm} km)`;
 
-                recordHistoryEntry({ timestamp: dateFormatted, mode: 2, location: chargeState.location, startPct: startPct, endPct: finalPct, duration: calculatedMinutesNeeded, delay: chargeState.delayMins });
+                recordHistoryEntry({ timestamp: dateFormatted, mode: 2, location: chargeState.location, startPct: startPct, endPct: finalPct, duration: calculatedMinutesNeeded, deferredStr: chargeState.deferredTimeStr });
             }
         }
 
         async function shareChargingStatus() {
             if (calculatedMinutesNeeded <= 0) return;
             let text = `⚡ Rezon en charge : ${lastTargetPct}% prévus à ${lastEndFormatted} (+${lastGainedKm} km).`;
-            if (chargeState.delayMins > 0) {
+            if (chargeState.deferredTimeStr) {
                 text = `⚡ Rezon (Départ différé à ${lastStartFormatted}) : ${lastTargetPct}% prévus à ${lastEndFormatted} (+${lastGainedKm} km).`;
             }
             if (navigator.share) {
@@ -1577,8 +1636,17 @@
 
         function createICSAlarm() {
             if (calculatedMinutesNeeded <= 0) return;
-            const now = new Date();
-            const startChargeDate = new Date(now.getTime() + chargeState.delayMins * 60000);
+            const timeNow = new Date();
+            let startChargeDate = new Date(timeNow.getTime());
+
+            if (chargeState.deferredTimeStr) {
+                const [defH, defM] = chargeState.deferredTimeStr.split(':').map(Number);
+                startChargeDate.setHours(defH, defM, 0, 0);
+                if (startChargeDate < timeNow) {
+                    startChargeDate.setDate(startChargeDate.getDate() + 1);
+                }
+            }
+
             const endChargeDate = new Date(startChargeDate.getTime() + calculatedMinutesNeeded * 60000);
             const alarmDate = new Date(endChargeDate.getTime() - 5 * 60000);
             const formatDate = d => d.toISOString().replace(/-|:|\.\d+/g, "");
@@ -1588,6 +1656,12 @@
         }
 
         function handleError(error) { console.warn(`GPS Error: ${error.message}`); }
+
+        // Événement pour le bouton raccourci 22h00
+        document.getElementById('btn-22h').addEventListener('click', () => {
+            document.getElementById('deferred-time').value = "22:00";
+            updateCalculations();
+        });
 
         generateAppleTouchIcon();
         restoreChargeUIState();
