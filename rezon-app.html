@@ -698,7 +698,6 @@
         <button class="settings-btn" onclick="toggleSettingsModal(true)">⚙️</button>
     </header>
 
-    <!-- NOUVELLE BARRE DE NAVIGATION FUSIONNÉE -->
     <div class="main-nav">
         <button class="nav-btn active" id="tab-app-dash" onclick="switchAppTab('dash')">🏍️ Tableau de bord</button>
         <button class="nav-btn" id="tab-app-charge" onclick="switchAppTab('charge')">⚡ Simulateur Charge</button>
@@ -813,6 +812,27 @@
             </div>
         </div>
 
+        <!-- BLOC DEPART DIFFÉRÉ (AJOUTÉ) -->
+        <div class="card">
+            <div class="range-container">
+                <div class="range-header">
+                    <span class="section-label">⏱️ Départ différé</span>
+                    <span class="range-value" style="color: var(--accent-yellow)" id="delay-val-display">Immédiat</span>
+                </div>
+                <div class="slider-with-controls">
+                    <button class="btn-step" onclick="stepDelay(-30)">−</button>
+                    <input type="range" id="delay-range" min="0" max="720" step="30" value="0" oninput="updateCalculations()">
+                    <button class="btn-step" onclick="stepDelay(30)">+</button>
+                </div>
+                <div class="quick-time-grid">
+                    <button class="quick-btn" onclick="setDelay(0)">Direct</button>
+                    <button class="quick-btn" onclick="setDelay(60)">+1 h</button>
+                    <button class="quick-btn" onclick="setDelay(120)">+2 h</button>
+                    <button class="quick-btn" onclick="setDelay(240)">+4 h</button>
+                </div>
+            </div>
+        </div>
+
         <div class="result-card" id="result-card">
             <div class="result-title" id="result-title">Temps de charge requis</div>
             <div class="result-main" id="result-main">1h 45m</div>
@@ -832,7 +852,7 @@
         </div>
     </div>
 
-    <!-- MODALE RÉGLAGES GLOBAUX (AUTONOMIE & HISTORIQUE) -->
+    <!-- MODALE RÉGLAGES GLOBAUX -->
     <div id="settings-modal" class="modal-shade" onclick="toggleSettingsModal(false)">
         <div class="modal-box" onclick="event.stopPropagation()">
             <div class="modal-title">RÉGLAGES ET HISTORIQUE</div>
@@ -874,7 +894,7 @@
         </div>
     </div>
 
-    <!-- MODALE CONTEXTUELLE CARTE GPS (APPUI LONG) -->
+    <!-- MODALE CONTEXTUELLE CARTE GPS -->
     <div id="context-modal" class="modal-shade" onclick="closeContextModal()">
         <div class="modal-box" onclick="event.stopPropagation()">
             <div class="modal-title" id="context-modal-title">POINT SÉLECTIONNÉ</div>
@@ -890,7 +910,6 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        /* CONFIGURATION & ETATS GLOBAUX */
         const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImY4MmQ4ZTYzNTYwYjQzNzM4NTEwZTU1YTBjNTlmNGQwIiwiaCI6Im11cm11cjY0In0=";
 
         let CONFIG = {
@@ -904,25 +923,13 @@
         let totalDistance = parseFloat(localStorage.getItem('moto_distance')) || 0; 
         let currentRange = parseFloat(localStorage.getItem('moto_current_range')) || CONFIG.range.solo; 
         
-        let lastPosition = null;
-        let watchId = null;
-        let map = null;
-        let marker = null;
-        let gpxLayer = null; 
-        let gpxPoints = []; 
-        let tempDestinationMarker = null;
-        let autoCenter = true;
-        let autoCenterTimeout = null;
-        let currentHeading = 0;
+        let lastPosition = null, watchId = null, map = null, marker = null, gpxLayer = null, gpxPoints = []; 
+        let tempDestinationMarker = null, autoCenter = true, autoCenterTimeout = null, currentHeading = 0;
 
         let targetDestinationName = localStorage.getItem('moto_target_name') || null;
         let targetCoords = JSON.parse(localStorage.getItem('moto_target_coords')) || null; 
         let waypointCoords = JSON.parse(localStorage.getItem('moto_waypoint_coords')) || null; 
-        let isCalculatingRoute = false;
-        let remainingDurationSeconds = 0; 
-        let lastRouteCalculationTime = 0;  
-        let autocompleteTimeout = null;
-        let longPressedLatLng = null; 
+        let isCalculatingRoute = false, remainingDurationSeconds = 0, lastRouteCalculationTime = 0, autocompleteTimeout = null, longPressedLatLng = null; 
 
         let isConnectedBLE = false;
         const REZON_SERVICE_UUID = '0000e0ff-3c17-d293-8e48-14fe2e4da212';
@@ -935,29 +942,27 @@
             location: localStorage.getItem('rezon_last_location') || 'borne',
             batM1: parseInt(localStorage.getItem('rezon_bat_m1')) || 30,
             batM2: parseInt(localStorage.getItem('rezon_bat_m2')) || 30,
-            timeM2: parseInt(localStorage.getItem('rezon_time_m2')) || 45
+            timeM2: parseInt(localStorage.getItem('rezon_time_m2')) || 45,
+            delayMins: parseInt(localStorage.getItem('rezon_delay_mins')) || 0
         };
 
         let calculatedMinutesNeeded = 0;
         let lastEndFormatted = "";
+        let lastStartFormatted = "";
         let lastTargetPct = 100;
         let lastGainedKm = 0;
 
-        /* INITIALISATION */
         function startApp() {
             if ("geolocation" in navigator) {
                 document.getElementById('overlay').style.display = 'none';
                 initMap();
-                watchId = navigator.geolocation.watchPosition(updatePosition, handleError, { 
-                    enableHighAccuracy: true, timeout: 10000, maximumAge: 0 
-                });
+                watchId = navigator.geolocation.watchPosition(updatePosition, handleError, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
                 if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(() => {});
             }
         }
 
         function generateAppleTouchIcon() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 180; canvas.height = 180;
+            const canvas = document.createElement('canvas'); canvas.width = 180; canvas.height = 180;
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = '#0b0e14'; ctx.fillRect(0, 0, 180, 180);
             ctx.fillStyle = '#161b26'; ctx.beginPath(); ctx.arc(90, 90, 75, 0, Math.PI * 2); ctx.fill();
@@ -971,10 +976,7 @@
             document.getElementById('tab-app-charge').classList.toggle('active', tab === 'charge');
             document.getElementById('section-dash').style.display = tab === 'dash' ? 'flex' : 'none';
             document.getElementById('section-charge').style.display = tab === 'charge' ? 'flex' : 'none';
-
-            if (tab === 'dash' && map) {
-                setTimeout(() => { map.invalidateSize(); }, 200);
-            }
+            if (tab === 'dash' && map) setTimeout(() => { map.invalidateSize(); }, 200);
         }
 
         /* LOGIQUE CARTE & NAVIGATION (HUD/GPS) */
@@ -982,17 +984,11 @@
             map = L.map('map', { zoomControl: false, inertia: false, tap: false }).setView([46.2276, 2.2137], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-            const arrowIcon = L.divIcon({
-                className: 'custom-arrow-container',
-                html: '<div id="moto-arrow" class="arrow-marker"></div>',
-                iconSize: [28, 38], iconAnchor: [14, 24] 
-            });
+            const arrowIcon = L.divIcon({ className: 'custom-arrow-container', html: '<div id="moto-arrow" class="arrow-marker"></div>', iconSize: [28, 38], iconAnchor: [14, 24] });
             marker = L.marker([0, 0], { icon: arrowIcon }).addTo(map);
 
             map.on('dragstart zoomstart', () => { 
-                autoCenter = false; 
-                clearTimeout(autoCenterTimeout);
-                rotateMap(0); 
+                autoCenter = false; clearTimeout(autoCenterTimeout); rotateMap(0); 
                 autoCenterTimeout = setTimeout(() => { autoCenter = true; }, 6000);
             });
 
@@ -1001,14 +997,11 @@
                 handleLongPress(e.latlng);
             });
 
-            if (localStorage.getItem('moto_gpx_data')) {
-                parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
-            }
+            if (localStorage.getItem('moto_gpx_data')) parseAndDrawGpx(localStorage.getItem('moto_gpx_data'), false);
         }
 
         function rotateMap(heading) {
-            const mapEl = document.getElementById('map');
-            const arrowEl = document.getElementById('moto-arrow');
+            const mapEl = document.getElementById('map'), arrowEl = document.getElementById('moto-arrow');
             if (autoCenter && heading !== null && heading !== undefined) {
                 mapEl.style.transform = `rotate(${-heading}deg)`;
                 if (arrowEl) arrowEl.style.transform = `rotate(${heading}deg)`;
@@ -1019,23 +1012,14 @@
         }
 
         function updatePosition(position) {
-            let lat = position.coords.latitude;
-            let lon = position.coords.longitude;
-            let speedKmh = 0;
-
+            let lat = position.coords.latitude, lon = position.coords.longitude, speedKmh = 0;
             if (position.coords.speed !== null && position.coords.speed > 0) speedKmh = Math.round(position.coords.speed * 3.6);
             if (position.coords.heading !== null && !isNaN(position.coords.heading) && speedKmh > 5) currentHeading = position.coords.heading;
 
             if (map) {
                 marker.setLatLng([lat, lon]);
-                if (autoCenter) {
-                    map.setView([lat, lon], 16);
-                    rotateMap(currentHeading);
-                }
-                if (gpxPoints.length > 0) {
-                    checkRouteDeviationAndClean(lat, lon);
-                    updateNextIntersectionUI(lat, lon, speedKmh);
-                }
+                if (autoCenter) { map.setView([lat, lon], 16); rotateMap(currentHeading); }
+                if (gpxPoints.length > 0) { checkRouteDeviationAndClean(lat, lon); updateNextIntersectionUI(lat, lon, speedKmh); }
             }
 
             if (lastPosition && !isConnectedBLE) {
@@ -1048,29 +1032,20 @@
                     else if (speedKmh >= 80 && speedKmh < 95) penaltyFactor = 1.25; 
                     else if (speedKmh >= 95) penaltyFactor = 1.85;
 
-                    currentRange -= (dist * penaltyFactor);
-                    if (currentRange < 0) currentRange = 0;
-
-                    localStorage.setItem('moto_distance', totalDistance);
-                    localStorage.setItem('moto_current_range', currentRange);
+                    currentRange -= (dist * penaltyFactor); if (currentRange < 0) currentRange = 0;
+                    localStorage.setItem('moto_distance', totalDistance); localStorage.setItem('moto_current_range', currentRange);
                 }
             } else if (lastPosition && isConnectedBLE) {
                 let dist = calculateDistance(lastPosition.coords.latitude, lastPosition.coords.longitude, lat, lon);
-                if (speedKmh > 2 || dist > 0.005) {
-                    totalDistance += dist;
-                    localStorage.setItem('moto_distance', totalDistance);
-                }
+                if (speedKmh > 2 || dist > 0.005) { totalDistance += dist; localStorage.setItem('moto_distance', totalDistance); }
             }
-            lastPosition = position;
-            updateDashUI(speedKmh, totalDistance);
+            lastPosition = position; updateDashUI(speedKmh, totalDistance);
         }
 
         function getRemainingTrajectoryDistance() {
             if (!gpxPoints || gpxPoints.length < 2) return 0;
             let routeDist = 0;
-            for (let i = 0; i < gpxPoints.length - 1; i++) {
-                routeDist += calculateDistance(gpxPoints[i][0], gpxPoints[i][1], gpxPoints[i+1][0], gpxPoints[i+1][1]);
-            }
+            for (let i = 0; i < gpxPoints.length - 1; i++) routeDist += calculateDistance(gpxPoints[i][0], gpxPoints[i][1], gpxPoints[i+1][0], gpxPoints[i+1][1]);
             return routeDist;
         }
 
@@ -1080,48 +1055,31 @@
                 document.getElementById('next-intersection-time').innerText = "Arrivée";
                 return;
             }
-
-            let intersectionIndex = -1;
-            let accumulationDistance = calculateDistance(currentLat, currentLon, gpxPoints[0][0], gpxPoints[0][1]);
-
+            let intersectionIndex = -1, accumulationDistance = calculateDistance(currentLat, currentLon, gpxPoints[0][0], gpxPoints[0][1]);
             for (let i = 0; i < gpxPoints.length - 2; i++) {
                 let p1 = gpxPoints[i], p2 = gpxPoints[i+1], p3 = gpxPoints[i+2];
                 accumulationDistance += calculateDistance(p1[0], p1[1], p2[0], p2[1]);
-                let b1 = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * 180 / Math.PI;
-                let b2 = Math.atan2(p3[1] - p2[1], p3[0] - p2[0]) * 180 / Math.PI;
-                let diff = b2 - b1;
-                if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
-
+                let b1 = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * 180 / Math.PI, b2 = Math.atan2(p3[1] - p2[1], p3[0] - p2[0]) * 180 / Math.PI;
+                let diff = b2 - b1; if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
                 if (Math.abs(diff) > 25) { intersectionIndex = i + 1; break; }
             }
-
             if (intersectionIndex === -1) {
                 document.getElementById('next-intersection-icon').innerText = "⬆️";
                 formatTimeText(getRemainingTrajectoryDistance() + calculateDistance(currentLat, currentLon, gpxPoints[0][0], gpxPoints[0][1]), currentSpeedKmh);
                 return;
             }
-
             let p1 = gpxPoints[intersectionIndex - 1], p2 = gpxPoints[intersectionIndex], p3 = gpxPoints[intersectionIndex + 1];
-            let b1 = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * 180 / Math.PI;
-            let b2 = Math.atan2(p3[1] - p2[1], p3[0] - p2[0]) * 180 / Math.PI;
-            let diff = b2 - b1;
-            if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
-
-            let icon = "⬆️";
-            if (Math.abs(diff) >= 75) icon = "🛑";
-            else if (diff < -25) icon = "⬅️";
-            else if (diff > 25) icon = "➡️";
-
+            let b1 = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * 180 / Math.PI, b2 = Math.atan2(p3[1] - p2[1], p3[0] - p2[0]) * 180 / Math.PI;
+            let diff = b2 - b1; if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
+            let icon = "⬆️"; if (Math.abs(diff) >= 75) icon = "🛑"; else if (diff < -25) icon = "⬅️"; else if (diff > 25) icon = "➡️";
             document.getElementById('next-intersection-icon').innerText = icon;
             formatTimeText(accumulationDistance, currentSpeedKmh);
         }
 
         function formatTimeText(distKm, speedKmh) {
-            let el = document.getElementById('next-intersection-time');
-            let referenceSpeed = speedKmh > 5 ? speedKmh : 40;
+            let el = document.getElementById('next-intersection-time'), referenceSpeed = speedKmh > 5 ? speedKmh : 40;
             let timeSec = Math.round((distKm / referenceSpeed) * 3600);
-            if (timeSec < 60) el.innerText = `${timeSec} s`;
-            else el.innerText = `${Math.floor(timeSec / 60)} min`;
+            if (timeSec < 60) el.innerText = `${timeSec} s`; else el.innerText = `${Math.floor(timeSec / 60)} min`;
         }
 
         function checkRouteDeviationAndClean(currentLat, currentLon) {
@@ -1130,18 +1088,10 @@
                 let dist = calculateDistance(currentLat, currentLon, gpxPoints[i][0], gpxPoints[i][1]);
                 if (dist < minDistance) { minDistance = dist; closestIndex = i; }
             }
-
-            if (targetCoords && minDistance > 0.150 && !isCalculatingRoute) {
-                executeSilentRecalculate(currentLat, currentLon);
-                return;
+            if (targetCoords && minDistance > 0.150 && !isCalculatingRoute) { executeSilentRecalculate(currentLat, currentLon); return; }
+            if (waypointCoords && calculateDistance(currentLat, currentLon, waypointCoords.lat, waypointCoords.lon) < 0.050) {
+                waypointCoords = null; localStorage.removeItem('moto_waypoint_coords');
             }
-
-            if (waypointCoords) {
-                if (calculateDistance(currentLat, currentLon, waypointCoords.lat, waypointCoords.lon) < 0.050) {
-                    waypointCoords = null; localStorage.removeItem('moto_waypoint_coords');
-                }
-            }
-
             if (closestIndex > 0 && minDistance < 0.150) {
                 gpxPoints.splice(0, closestIndex);
                 localStorage.setItem('moto_gpx_data', JSON.stringify(gpxPoints));
@@ -1151,14 +1101,12 @@
 
         function handleRouteBtnClick() {
             if (!lastPosition) { alert("Signal GPS manquant."); return; }
-            if (targetDestinationName) {
-                if (confirm(`Arrêter le guidage vers ${targetDestinationName} ?`)) menuDeleteGpx();
-            } else { showSearchField(); }
+            if (targetDestinationName) { if (confirm(`Arrêter le guidage vers ${targetDestinationName} ?`)) menuDeleteGpx(); }
+            else { showSearchField(); }
         }
 
         function showSearchField() {
-            const wrapper = document.getElementById('search-wrapper');
-            const input = document.getElementById('search-input');
+            const wrapper = document.getElementById('search-wrapper'), input = document.getElementById('search-input');
             wrapper.classList.add('active'); input.value = ""; input.focus();
         }
 
@@ -1173,20 +1121,16 @@
             const query = document.getElementById('search-input').value.trim();
             const fontBox = document.getElementById('search-results');
             if (query.length < 3) { fontBox.classList.remove('active'); fontBox.innerHTML = ""; return; }
-
             autocompleteTimeout = setTimeout(async () => {
                 try {
                     let biasString = lastPosition ? `&lat=${lastPosition.coords.latitude}&lon=${lastPosition.coords.longitude}` : "";
                     let url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(query)}&countrycodes=fr${biasString}`;
-                    let response = await fetch(url, { headers: { 'Accept-Language': 'fr' } });
-                    let data = await response.json();
-
+                    let response = await fetch(url, { headers: { 'Accept-Language': 'fr' } }), data = await response.json();
                     fontBox.innerHTML = "";
                     if (data.length > 0) {
                         fontBox.classList.add('active');
                         data.forEach(item => {
-                            let parts = item.display_name.split(',');
-                            let shortName = parts[0] + (parts[1] ? `, ${parts[1].trim()}` : "");
+                            let parts = item.display_name.split(','), shortName = parts[0] + (parts[1] ? `, ${parts[1].trim()}` : "");
                             let div = document.createElement('div');
                             div.className = 'search-item'; div.innerText = shortName;
                             div.onclick = () => selectDestination(item, shortName);
@@ -1212,9 +1156,7 @@
 
         async function executeSilentRecalculate(startLat, startLon, fitBounds = false) {
             if (!targetCoords || isCalculatingRoute) return;
-            isCalculatingRoute = true;
-            document.getElementById('route-btn').innerText = "🔄 Recalcul...";
-
+            isCalculatingRoute = true; document.getElementById('route-btn').innerText = "🔄 Recalcul...";
             try {
                 let routeUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
                 let coordList = [[parseFloat(startLon), parseFloat(startLat)]];
@@ -1227,7 +1169,6 @@
                     body: JSON.stringify({ coordinates: coordList, preference: "recommended", options: { avoid_features: ["highways"] } })
                 });
                 let routeData = await routeResponse.json();
-
                 if (routeData.features && routeData.features.length > 0) {
                     let feature = routeData.features[0];
                     gpxPoints = feature.geometry.coordinates.map(coord => [coord[1], coord[0]]);
@@ -1239,20 +1180,16 @@
                 }
             } catch (e) { console.error(e); } 
             finally {
-                isCalculatingRoute = false;
-                updateDashUI(Math.round(document.getElementById('speed').innerText || 0), totalDistance);
+                isCalculatingRoute = false; updateDashUI(Math.round(document.getElementById('speed').innerText || 0), totalDistance);
             }
         }
 
-        /* CONTEXTUAL MENU & MAP ACTIONS */
         function handleLongPress(latlng) {
             longPressedLatLng = latlng;
             if (tempDestinationMarker) map.removeLayer(tempDestinationMarker);
             tempDestinationMarker = L.circleMarker(latlng, { radius: 10, color: '#e63946', fillColor: '#e63946', fillOpacity: 0.8 }).addTo(map);
-
             const waypointBtn = document.getElementById('context-btn-waypoint');
-            waypointBtn.disabled = !targetCoords;
-            waypointBtn.style.opacity = !targetCoords ? "0.4" : "1";
+            waypointBtn.disabled = !targetCoords; waypointBtn.style.opacity = !targetCoords ? "0.4" : "1";
             document.getElementById('context-modal').classList.add('active');
         }
 
@@ -1260,62 +1197,42 @@
 
         function contextSetNewDestination() {
             closeContextModal();
-            targetDestinationName = "Point Carte";
-            targetCoords = { lat: longPressedLatLng.lat, lon: longPressedLatLng.lng };
-            waypointCoords = null; 
-            localStorage.setItem('moto_target_name', targetDestinationName);
-            localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords));
-            localStorage.removeItem('moto_waypoint_coords');
-            let startLat = lastPosition ? lastPosition.coords.latitude : map.getCenter().lat;
-            let startLon = lastPosition ? lastPosition.coords.longitude : map.getCenter().lng;
+            targetDestinationName = "Point Carte"; targetCoords = { lat: longPressedLatLng.lat, lon: longPressedLatLng.lng }; waypointCoords = null; 
+            localStorage.setItem('moto_target_name', targetDestinationName); localStorage.setItem('moto_target_coords', JSON.stringify(targetCoords)); localStorage.removeItem('moto_waypoint_coords');
+            let startLat = lastPosition ? lastPosition.coords.latitude : map.getCenter().lat, startLon = lastPosition ? lastPosition.coords.longitude : map.getCenter().lng;
             executeSilentRecalculate(startLat, startLon, true);
         }
 
         function contextAddWaypoint() {
-            closeContextModal();
-            if (!targetCoords) return;
+            closeContextModal(); if (!targetCoords) return;
             waypointCoords = { lat: longPressedLatLng.lat, lon: longPressedLatLng.lng };
             localStorage.setItem('moto_waypoint_coords', JSON.stringify(waypointCoords));
-            let startLat = lastPosition ? lastPosition.coords.latitude : map.getCenter().lat;
-            let startLon = lastPosition ? lastPosition.coords.longitude : map.getCenter().lng;
+            let startLat = lastPosition ? lastPosition.coords.latitude : map.getCenter().lat, startLon = lastPosition ? lastPosition.coords.longitude : map.getCenter().lng;
             executeSilentRecalculate(startLat, startLon, true);
         }
 
-        /* BLUETOOTH REZON VCU */
         async function connectBluetoothMotos() {
             const bleBtn = document.getElementById('ble-btn');
             try {
                 bleBtn.innerText = "⚡ Connexion VCU Rezon...";
                 const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [REZON_SERVICE_UUID] });
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService(REZON_SERVICE_UUID);
-                const characteristic = await service.getCharacteristic(REZON_CHAR_UUID);
+                const server = await device.gatt.connect(), service = await server.getPrimaryService(REZON_SERVICE_UUID), characteristic = await service.getCharacteristic(REZON_CHAR_UUID);
                 await characteristic.startNotifications();
-                
-                isConnectedBLE = true;
-                bleBtn.style.backgroundColor = "var(--accent-green)";
-                bleBtn.style.color = "#0b0e14";
-                bleBtn.innerText = "✅ Rezon Bohemia Connectée Live";
+                isConnectedBLE = true; bleBtn.style.backgroundColor = "var(--accent-green)"; bleBtn.style.color = "#0b0e14"; bleBtn.innerText = "✅ Rezon Bohemia Connectée Live";
 
                 characteristic.addEventListener('characteristicvaluechanged', (event) => {
                     let batteryPercent = event.target.value.getUint8(0);
                     if (batteryPercent > 0 && batteryPercent <= 100) {
                         currentRange = batteryPercent;
                         document.getElementById('battery-range').value = batteryPercent;
-                        updateDashUI(Math.round(document.getElementById('speed').innerText), totalDistance);
-                        updateCalculations();
+                        updateDashUI(Math.round(document.getElementById('speed').innerText), totalDistance); updateCalculations();
                     }
                 });
 
                 device.addEventListener('gattserverdisconnected', () => {
-                    isConnectedBLE = false;
-                    bleBtn.style.backgroundColor = "var(--accent-purple)";
-                    bleBtn.style.color = "#fff";
-                    bleBtn.innerText = "🔌 Relancer connexion Bohemia";
+                    isConnectedBLE = false; bleBtn.style.backgroundColor = "var(--accent-purple)"; bleBtn.style.color = "#fff"; bleBtn.innerText = "🔌 Relancer connexion Bohemia";
                 });
-            } catch (error) {
-                bleBtn.innerText = "❌ Connexion Échouée";
-            }
+            } catch (error) { bleBtn.innerText = "❌ Connexion Échouée"; }
         }
 
         function triggerGpxUpload() { document.getElementById('gpx-file').click(); }
@@ -1326,8 +1243,7 @@
             reader.onload = function(e) {
                 targetDestinationName = null; targetCoords = null; waypointCoords = null; remainingDurationSeconds = 0;
                 localStorage.removeItem('moto_target_name'); localStorage.removeItem('moto_target_coords'); localStorage.removeItem('moto_waypoint_coords');
-                localStorage.setItem('moto_gpx_data', e.target.result); 
-                parseAndDrawGpx(e.target.result, true);
+                localStorage.setItem('moto_gpx_data', e.target.result); parseAndDrawGpx(e.target.result, true);
             };
             reader.readAsText(file);
         }
@@ -1337,8 +1253,7 @@
                 if (gpxLayer) map.removeLayer(gpxLayer);
                 if (storedData.startsWith('[')) gpxPoints = JSON.parse(storedData);
                 else {
-                    const xmlDoc = (new DOMParser()).parseFromString(storedData, "text/xml");
-                    const trkpts = xmlDoc.getElementsByTagName("trkpt");
+                    const xmlDoc = (new DOMParser()).parseFromString(storedData, "text/xml"), trkpts = xmlDoc.getElementsByTagName("trkpt");
                     gpxPoints = [];
                     for (let i = 0; i < trkpts.length; i++) {
                         let lat = parseFloat(trkpts[i].getAttribute("lat")), lon = parseFloat(trkpts[i].getAttribute("lon"));
@@ -1376,11 +1291,9 @@
             document.getElementById('speed').innerText = speed;
             const routeBtn = document.getElementById('route-btn');
             if (targetDestinationName) {
-                routeBtn.innerText = `🛑 Stop : ${targetDestinationName}`;
-                routeBtn.style.backgroundColor = "var(--accent-red)";
+                routeBtn.innerText = `🛑 Stop : ${targetDestinationName}`; routeBtn.style.backgroundColor = "var(--accent-red)";
             } else {
-                routeBtn.innerText = "🔍 Trajet Direct";
-                routeBtn.style.backgroundColor = "#ff9500";
+                routeBtn.innerText = "🔍 Trajet Direct"; routeBtn.style.backgroundColor = "#ff9500";
             }
 
             if (targetDestinationName && remainingDurationSeconds > 0) {
@@ -1389,45 +1302,34 @@
                 let dateArr = new Date(Date.now() + remainingDurationSeconds * 1000);
                 document.getElementById('eta-time').innerText = `${dateArr.getHours()}:${dateArr.getMinutes() < 10 ? '0':''}${dateArr.getMinutes()}`;
             } else {
-                document.getElementById('eta-time').innerText = "--:--";
-                document.getElementById('eta-duration').innerText = "--";
+                document.getElementById('eta-time').innerText = "--:--"; document.getElementById('eta-duration').innerText = "--";
             }
 
-            const rangeValueEl = document.getElementById('range');
-            const rangeLabelEl = document.getElementById('range-label');
-            const unitLabelEl = document.getElementById('unit-label');
-            let displayRangeValue = Math.round(currentRange);
-            let actualRangeKm = isConnectedBLE ? (currentRange / 100) * CONFIG.range.solo : currentRange;
+            const rangeValueEl = document.getElementById('range'), rangeLabelEl = document.getElementById('range-label'), unitLabelEl = document.getElementById('unit-label');
+            let displayRangeValue = Math.round(currentRange), actualRangeKm = isConnectedBLE ? (currentRange / 100) * CONFIG.range.solo : currentRange;
 
             if (gpxPoints.length > 0) {
                 let remainingTripKm = Math.round(getRemainingTrajectoryDistance());
-                rangeLabelEl.innerText = "Trajet / Autonomie";
-                unitLabelEl.innerText = isConnectedBLE ? "km | %" : "km";
+                rangeLabelEl.innerText = "Trajet / Autonomie"; unitLabelEl.innerText = isConnectedBLE ? "km | %" : "km";
                 rangeValueEl.innerHTML = `${remainingTripKm} / <span id="dynamic-range-span">${displayRangeValue}</span>`;
                 const rangeSpan = document.getElementById('dynamic-range-span');
                 if (rangeSpan) rangeSpan.style.color = (remainingTripKm > actualRangeKm) ? "var(--accent-red)" : "var(--accent-green)";
             } else {
-                rangeLabelEl.innerText = "Autonomie";
-                rangeValueEl.innerText = displayRangeValue;
+                rangeLabelEl.innerText = "Autonomie"; rangeValueEl.innerText = displayRangeValue;
                 if (isConnectedBLE) {
-                    unitLabelEl.innerText = "% live";
-                    rangeValueEl.style.color = (currentRange < 20) ? 'var(--accent-red)' : 'var(--accent-blue)';
+                    unitLabelEl.innerText = "% live"; rangeValueEl.style.color = (currentRange < 20) ? 'var(--accent-red)' : 'var(--accent-blue)';
                 } else {
-                    unitLabelEl.innerText = "km restants";
-                    rangeValueEl.style.color = (currentRange < 30) ? 'var(--accent-red)' : 'var(--text-primary)';
+                    unitLabelEl.innerText = "km restants"; rangeValueEl.style.color = (currentRange < 30) ? 'var(--accent-red)' : 'var(--text-primary)';
                 }
             }
         }
 
-        /* MODALES ET MENU DASHBOARD */
         function openDashOptionsMenu() { document.getElementById('dash-options-modal').classList.add('active'); }
         function closeDashOptionsMenu() { document.getElementById('dash-options-modal').classList.remove('active'); }
 
         function menuResetFull() {
-            closeDashOptionsMenu();
-            currentRange = CONFIG.range.solo; totalDistance = 0;
-            localStorage.setItem('moto_current_range', currentRange); localStorage.setItem('moto_distance', totalDistance);
-            updateDashUI(0, totalDistance);
+            closeDashOptionsMenu(); currentRange = CONFIG.range.solo; totalDistance = 0;
+            localStorage.setItem('moto_current_range', currentRange); localStorage.setItem('moto_distance', totalDistance); updateDashUI(0, totalDistance);
         }
 
         function menuSetBattery() {
@@ -1438,61 +1340,61 @@
                     let pct = parseInt(input, 10);
                     if (!isNaN(pct) && pct >= 0 && pct <= 100) {
                         currentRange = (pct / 100) * CONFIG.range.solo;
-                        localStorage.setItem('moto_current_range', currentRange);
-                        updateDashUI(0, totalDistance);
+                        localStorage.setItem('moto_current_range', currentRange); updateDashUI(0, totalDistance);
                     }
                 }
             }, 300);
         }
 
         function menuDeleteGpx() {
-            closeDashOptionsMenu();
-            gpxPoints = [];
+            closeDashOptionsMenu(); gpxPoints = [];
             if (gpxLayer) map.removeLayer(gpxLayer);
             if (tempDestinationMarker) { map.removeLayer(tempDestinationMarker); tempDestinationMarker = null; }
             targetDestinationName = null; targetCoords = null; waypointCoords = null; remainingDurationSeconds = 0;
             localStorage.removeItem('moto_gpx_data'); localStorage.removeItem('moto_target_name'); localStorage.removeItem('moto_target_coords'); localStorage.removeItem('moto_waypoint_coords');
-            document.getElementById('next-intersection-icon').innerText = "⬆️";
-            document.getElementById('next-intersection-time').innerText = "-- min";
+            document.getElementById('next-intersection-icon').innerText = "⬆️"; document.getElementById('next-intersection-time').innerText = "-- min";
             updateDashUI(Math.round(document.getElementById('speed').innerText), totalDistance);
         }
 
-        /* SIMULATEUR DE CHARGE (FONCTIONS CALCULS) */
+        /* SIMULATEUR DE CHARGE & DÉPART DIFFÉRÉ */
         function toggleSettingsModal(show) {
             document.getElementById('settings-modal').classList.toggle('active', show);
             if (show) {
-                document.getElementById('cfg-solo').value = CONFIG.range.solo;
-                document.getElementById('cfg-duo').value = CONFIG.range.duo;
+                document.getElementById('cfg-solo').value = CONFIG.range.solo; document.getElementById('cfg-duo').value = CONFIG.range.duo;
                 renderHistory();
             }
         }
 
         function saveSettings() {
-            const soloVal = parseInt(document.getElementById('cfg-solo').value) || 170;
-            const duoVal = parseInt(document.getElementById('cfg-duo').value) || 140;
+            const soloVal = parseInt(document.getElementById('cfg-solo').value) || 170, duoVal = parseInt(document.getElementById('cfg-duo').value) || 140;
             CONFIG.range.solo = soloVal; CONFIG.range.duo = duoVal;
             localStorage.setItem('rezon_solo_km', soloVal); localStorage.setItem('rezon_duo_km', duoVal);
-            updateCalculations();
-            toggleSettingsModal(false);
+            updateCalculations(); toggleSettingsModal(false);
         }
 
         function switchChargeMode(newMode) {
-            chargeState.mode = newMode;
-            localStorage.setItem('rezon_last_mode', newMode);
-            restoreChargeUIState();
-            updateCalculations();
+            chargeState.mode = newMode; localStorage.setItem('rezon_last_mode', newMode);
+            restoreChargeUIState(); updateCalculations();
         }
 
         function setChargeParam(key, value) {
             chargeState[key] = value;
             if (key === 'location') localStorage.setItem('rezon_last_location', value);
-            restoreChargeUIState();
-            updateCalculations();
+            restoreChargeUIState(); updateCalculations();
         }
 
         function togglePassengerMode() {
             chargeState.passenger = chargeState.passenger === 'solo' ? 'duo' : 'solo';
-            localStorage.setItem('rezon_last_passenger', chargeState.passenger);
+            localStorage.setItem('rezon_last_passenger', chargeState.passenger); updateCalculations();
+        }
+
+        function setDelay(mins) {
+            document.getElementById('delay-range').value = mins; updateCalculations();
+        }
+
+        function stepDelay(delta) {
+            const slider = document.getElementById('delay-range');
+            slider.value = Math.max(0, Math.min(720, (parseInt(slider.value) || 0) + delta));
             updateCalculations();
         }
 
@@ -1508,11 +1410,11 @@
             document.getElementById('battery-range').value = chargeState.batM1;
             document.getElementById('battery-range-m2').value = chargeState.batM2;
             document.getElementById('time-range').value = chargeState.timeM2;
+            document.getElementById('delay-range').value = chargeState.delayMins;
         }
 
         function formatMinutes(totalMinutes) {
-            const h = Math.floor(totalMinutes / 60);
-            const m = Math.round(totalMinutes % 60);
+            const h = Math.floor(totalMinutes / 60), m = Math.round(totalMinutes % 60);
             return h === 0 ? `${m} min` : `${h}h ${m < 10 ? '0' : ''}${m}m`;
         }
 
@@ -1524,18 +1426,12 @@
         }
 
         function applyBatteryColor(elementId, gaugeId, val) {
-            const el = document.getElementById(elementId);
-            const gauge = document.getElementById(gaugeId);
-            const resCard = document.getElementById('result-card');
-            
+            const el = document.getElementById(elementId), gauge = document.getElementById(gaugeId), resCard = document.getElementById('result-card');
             let color = "var(--accent-green)";
             if (val < 20) color = "var(--accent-red)";
             else if (val <= 50) color = "var(--accent-yellow)";
 
-            el.style.color = color;
-            gauge.style.backgroundColor = color;
-            gauge.style.width = `${val}%`;
-            resCard.style.borderColor = color;
+            el.style.color = color; gauge.style.backgroundColor = color; gauge.style.width = `${val}%`; resCard.style.borderColor = color;
         }
 
         function getMinutesToCharge(startPct, endPct, location) {
@@ -1567,15 +1463,13 @@
 
         function recordHistoryEntry(entry) {
             let history = JSON.parse(localStorage.getItem('rezon_history')) || [];
-            if (history.length > 0 && history[0].mode === entry.mode && history[0].startPct === entry.startPct && history[0].endPct === entry.endPct && history[0].location === entry.location) return;
-            history.unshift(entry);
-            if (history.length > 30) history.pop();
+            if (history.length > 0 && history[0].mode === entry.mode && history[0].startPct === entry.startPct && history[0].endPct === entry.endPct && history[0].location === entry.location && history[0].delay === entry.delay) return;
+            history.unshift(entry); if (history.length > 30) history.pop();
             localStorage.setItem('rezon_history', JSON.stringify(history));
         }
 
         function renderHistory() {
-            const container = document.getElementById('history-container');
-            const history = JSON.parse(localStorage.getItem('rezon_history')) || [];
+            const container = document.getElementById('history-container'), history = JSON.parse(localStorage.getItem('rezon_history')) || [];
             if (history.length === 0) {
                 container.innerHTML = '<div style="color:var(--text-secondary);font-size:12px;text-align:center;padding:8px;">Aucune simulation.</div>';
                 return;
@@ -1584,7 +1478,7 @@
                 <div class="history-item">
                     <div>
                         <strong>${item.mode === 1 ? '100% Requis' : 'Temps Fixe'} (${item.location === 'borne' ? '⚡ Borne' : '🏠 Maison'})</strong><br>
-                        <span style="color:var(--text-secondary);">${item.startPct}% ➔ ${item.endPct}% (${formatMinutes(item.duration)})</span>
+                        <span style="color:var(--text-secondary);">${item.startPct}% ➔ ${item.endPct}% (${formatMinutes(item.duration)})${item.delay > 0 ? ' [Différé ' + formatMinutes(item.delay) + ']' : ''}</span>
                     </div>
                     <div style="color:var(--text-secondary); font-size:10px;">${item.timestamp}</div>
                 </div>
@@ -1594,10 +1488,18 @@
         function clearHistory() { localStorage.removeItem('rezon_history'); renderHistory(); }
 
         function updateCalculations() {
-            const maxRange = CONFIG.range[chargeState.passenger];
-            const isSolo = chargeState.passenger === 'solo';
-            const timeNow = new Date();
+            const maxRange = CONFIG.range[chargeState.passenger], isSolo = chargeState.passenger === 'solo', timeNow = new Date();
             const dateFormatted = timeNow.toLocaleDateString([], { day: '2-digit', month: '2-digit' }) + ' ' + timeNow.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            chargeState.delayMins = parseInt(document.getElementById('delay-range').value) || 0;
+            localStorage.setItem('rezon_delay_mins', chargeState.delayMins);
+
+            const delayDisp = document.getElementById('delay-val-display');
+            if (chargeState.delayMins === 0) delayDisp.innerText = "Immédiat";
+            else delayDisp.innerText = `+${formatMinutes(chargeState.delayMins)}`;
+
+            const startTime = new Date(timeNow.getTime() + chargeState.delayMins * 60000);
+            lastStartFormatted = startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             if (chargeState.mode === 1) {
                 const currentPct = parseInt(document.getElementById('battery-range').value);
@@ -1606,7 +1508,7 @@
                 applyBatteryColor('battery-val', 'gauge-m1', currentPct);
                 
                 calculatedMinutesNeeded = getMinutesToCharge(currentPct, 100, chargeState.location);
-                const endTime = new Date(timeNow.getTime() + calculatedMinutesNeeded * 60000);
+                const endTime = new Date(startTime.getTime() + calculatedMinutesNeeded * 60000);
                 lastEndFormatted = endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                 lastGainedKm = Math.round(((100 - currentPct) / 100) * maxRange);
@@ -1614,11 +1516,19 @@
 
                 document.getElementById('result-title').innerText = "Temps pour atteindre 100%";
                 document.getElementById('result-main').innerText = formatMinutes(calculatedMinutesNeeded);
-                document.getElementById('result-sub').innerText = currentPct === 100 ? "Batterie déjà pleine !" : `Fin estimée à ${lastEndFormatted}`;
+                
+                if (currentPct === 100) {
+                    document.getElementById('result-sub').innerText = "Batterie déjà pleine !";
+                } else if (chargeState.delayMins > 0) {
+                    document.getElementById('result-sub').innerText = `Départ à ${lastStartFormatted} ➔ Fin à ${lastEndFormatted}`;
+                } else {
+                    document.getElementById('result-sub').innerText = `Fin estimée à ${lastEndFormatted}`;
+                }
+
                 document.getElementById('badge-icon').innerText = isSolo ? "👤" : "👥";
                 document.getElementById('badge-text').innerText = `${isSolo ? "Solo" : "Duo"} : +${lastGainedKm} km (Total ${maxRange} km)`;
 
-                recordHistoryEntry({ timestamp: dateFormatted, mode: 1, location: chargeState.location, startPct: currentPct, endPct: 100, duration: calculatedMinutesNeeded });
+                recordHistoryEntry({ timestamp: dateFormatted, mode: 1, location: chargeState.location, startPct: currentPct, endPct: 100, duration: calculatedMinutesNeeded, delay: chargeState.delayMins });
             } else {
                 const startPct = parseInt(document.getElementById('battery-range-m2').value);
                 localStorage.setItem('rezon_bat_m2', startPct);
@@ -1635,22 +1545,31 @@
                 lastGainedKm = Math.round((pctGained / 100) * maxRange);
                 lastTargetPct = finalPct;
 
-                const endTime = new Date(timeNow.getTime() + calculatedMinutesNeeded * 60000);
+                const endTime = new Date(startTime.getTime() + calculatedMinutesNeeded * 60000);
                 lastEndFormatted = endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                 document.getElementById('result-title').innerText = "Niveau après la charge";
                 document.getElementById('result-main').innerText = `${finalPct}%`;
-                document.getElementById('result-sub').innerText = `Prête à ${lastEndFormatted} (+${pctGained}% de batterie)`;
+                
+                if (chargeState.delayMins > 0) {
+                    document.getElementById('result-sub').innerText = `Charge de ${lastStartFormatted} à ${lastEndFormatted} (+${pctGained}%)`;
+                } else {
+                    document.getElementById('result-sub').innerText = `Prête à ${lastEndFormatted} (+${pctGained}% de batterie)`;
+                }
+
                 document.getElementById('badge-icon').innerText = isSolo ? "👤" : "👥";
                 document.getElementById('badge-text').innerText = `${isSolo ? "Solo" : "Duo"} : ${Math.round((finalPct/100)*maxRange)} km (+${lastGainedKm} km)`;
 
-                recordHistoryEntry({ timestamp: dateFormatted, mode: 2, location: chargeState.location, startPct: startPct, endPct: finalPct, duration: calculatedMinutesNeeded });
+                recordHistoryEntry({ timestamp: dateFormatted, mode: 2, location: chargeState.location, startPct: startPct, endPct: finalPct, duration: calculatedMinutesNeeded, delay: chargeState.delayMins });
             }
         }
 
         async function shareChargingStatus() {
             if (calculatedMinutesNeeded <= 0) return;
-            const text = `⚡ Rezon en charge : ${lastTargetPct}% prévus à ${lastEndFormatted} (+${lastGainedKm} km).`;
+            let text = `⚡ Rezon en charge : ${lastTargetPct}% prévus à ${lastEndFormatted} (+${lastGainedKm} km).`;
+            if (chargeState.delayMins > 0) {
+                text = `⚡ Rezon (Départ différé à ${lastStartFormatted}) : ${lastTargetPct}% prévus à ${lastEndFormatted} (+${lastGainedKm} km).`;
+            }
             if (navigator.share) {
                 try { await navigator.share({ title: 'Fin de charge Rezon', text: text }); } catch (err) {}
             } else { window.location.href = `sms:?&body=${encodeURIComponent(text)}`; }
@@ -1659,7 +1578,8 @@
         function createICSAlarm() {
             if (calculatedMinutesNeeded <= 0) return;
             const now = new Date();
-            const endChargeDate = new Date(now.getTime() + calculatedMinutesNeeded * 60000);
+            const startChargeDate = new Date(now.getTime() + chargeState.delayMins * 60000);
+            const endChargeDate = new Date(startChargeDate.getTime() + calculatedMinutesNeeded * 60000);
             const alarmDate = new Date(endChargeDate.getTime() - 5 * 60000);
             const formatDate = d => d.toISOString().replace(/-|:|\.\d+/g, "");
 
